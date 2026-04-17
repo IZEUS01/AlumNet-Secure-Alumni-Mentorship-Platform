@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <!-- CSP enforced server-side via Flask-Talisman; this is an extra client hint -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="page-wrapper">
+
+  <!-- Shared navbar (JS will show/hide nav items based on role) -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#" class="navbar-brand">Alum<span>Net</span></a>
+      <ul class="navbar-nav" id="nav_links">
+        <!-- Populated by auth.js / page scripts -->
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page content injected here by child templates -->
+  <main class="main-content" id="main_content">
+    <div class="container">
+      <!-- child content -->
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="/static/js/auth.js"></script>
+</body>
+</html>
