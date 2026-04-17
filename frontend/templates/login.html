@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Sign In — AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .auth-split {
+      display: grid;
+      grid-template-columns: 1fr 480px;
+      min-height: 100vh;
+    }
+
+    .auth-brand-panel {
+      background: linear-gradient(135deg, #080c14 0%, #0d1628 60%, #081420 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 4rem;
+      position: relative;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+    }
+
+    /* Animated grid lines on left panel */
+    .auth-brand-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(79, 196, 247, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 196, 247, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      animation: grid-shift 20s linear infinite;
+    }
+
+    @keyframes grid-shift {
+      from { background-position: 0 0; }
+      to   { background-position: 48px 48px; }
+    }
+
+    /* Floating orb */
+    .auth-brand-panel::after {
+      content: '';
+      position: absolute;
+      top: 20%;
+      left: 30%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(79,196,247,0.08) 0%, transparent 65%);
+      pointer-events: none;
+      animation: orb-float 10s ease-in-out infinite alternate;
+    }
+
+    @keyframes orb-float {
+      from { transform: translate(-20px, -20px); }
+      to   { transform: translate(20px, 20px); }
+    }
+
+    .brand-panel-content {
+      position: relative;
+      z-index: 1;
+      max-width: 440px;
+    }
+
+    .brand-logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.04em;
+      margin-bottom: 2.5rem;
+    }
+
+    .brand-logo span { color: var(--cyan); }
+
+    .brand-headline {
+      font-size: clamp(1.8rem, 3vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      font-family: 'Syne', sans-serif;
+    }
+
+    .brand-headline .grad {
+      background: linear-gradient(90deg, var(--cyan), var(--emerald));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .brand-desc {
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.7;
+      margin-bottom: 2.5rem;
+    }
+
+    .brand-pillars {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .pillar {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      opacity: 0;
+      animation: fade-up 0.5s ease forwards;
+    }
+
+    .pillar:nth-child(1) { animation-delay: 0.3s; }
+    .pillar:nth-child(2) { animation-delay: 0.45s; }
+    .pillar:nth-child(3) { animation-delay: 0.6s; }
+
+    .pillar-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(79,196,247,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .pillar-text strong {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .pillar-text span {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    /* Right form panel */
+    .auth-form-panel {
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2.5rem;
+    }
+
+    .auth-form-inner {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .form-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+
+    .form-subtitle {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    .pw-toggle {
+      position: relative;
+    }
+
+    .pw-toggle .pw-eye {
+      position: absolute;
+      right: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0;
+      font-size: 1rem;
+      line-height: 1;
+      transition: color var(--t-fast);
+    }
+
+    .pw-toggle .pw-eye:hover { color: var(--cyan); }
+    .pw-toggle .form-control  { padding-right: 2.75rem; }
+
+    .forgot-link {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      float: right;
+      margin-top: -0.2rem;
+      transition: color var(--t-fast);
+    }
+
+    .forgot-link:hover { color: var(--cyan); }
+
+    @media (max-width: 900px) {
+      .auth-split {
+        grid-template-columns: 1fr;
+      }
+      .auth-brand-panel { display: none; }
+      .auth-form-panel  { min-height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+<div class="auth-split">
+
+  <!-- Left: Brand panel -->
+  <div class="auth-brand-panel">
+    <div class="brand-panel-content">
+      <div class="brand-logo">Alum<span>Net</span></div>
+      <h1 class="brand-headline">
+        Where students meet<br/>
+        the <span class="grad">right mentors</span>
+      </h1>
+      <p class="brand-desc">
+        A secure, verified platform connecting GIK students with industry alumni.
+        Every profile is trusted. Every connection is meaningful.
+      </p>
+      <div class="brand-pillars">
+        <div class="pillar">
+          <div class="pillar-icon">🔐</div>
+          <div class="pillar-text">
+            <strong>Enterprise-Grade Security</strong>
+            <span>HTTPS, CSRF protection, bcrypt passwords</span>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="pillar-icon">✅</div>
+          <div class="pillar-text">
+            <strong>Admin-Verified Alumni</strong>
+            <span>Every mentor is reviewed before activation</span>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="pillar-icon">🛡️</div>
+          <div class="pillar-text">
+            <strong>Role-Based Access Control</strong>
+            <span>Students, alumni, and admins have separate views</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Login form -->
+  <div class="auth-form-panel">
+    <div class="auth-form-inner">
+      <p class="form-title">Welcome back</p>
+      <p class="form-subtitle">Sign in to your AlumNet account</p>
+
+      <div id="login_alert" class="alert hidden mb-2" role="alert"></div>
+
+      <form id="login_form" novalidate autocomplete="on">
+        <div class="form-group">
+          <label class="form-label" for="email">Email Address</label>
+          <input
+            class="form-control"
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="email"
+            placeholder="you@university.edu"
+            required
+            maxlength="254"
+          />
+          <div class="form-error" id="email_error" role="alert"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">
+            Password
+            <a href="#" class="forgot-link" tabindex="-1">Forgot password?</a>
+          </label>
+          <div class="pw-toggle">
+            <input
+              class="form-control"
+              type="password"
+              id="password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="Enter your password"
+              required
+              maxlength="128"
+            />
+            <button class="pw-eye" type="button" id="toggle_pw" aria-label="Toggle password visibility">
+              👁
+            </button>
+          </div>
+          <div class="form-error" id="password_error" role="alert"></div>
+        </div>
+
+        <div class="form-group" style="margin-top: -0.25rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="remember_me" style="width: auto; accent-color: var(--cyan);" />
+            <span style="font-size: 0.82rem; color: var(--text-dim);">Remember me on this device</span>
+          </label>
+        </div>
+
+        <button class="btn btn-primary w-full btn-lg" type="submit" id="login_btn" style="margin-top: 0.5rem;">
+          Sign In
+        </button>
+      </form>
+
+      <div class="auth-divider" style="margin: 1.75rem 0;">or</div>
+
+      <div class="auth-switch">
+        Don't have an account? <a href="/templates/register.html">Create one free</a>
+      </div>
+
+      <!-- Security notice -->
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); text-align: center;">
+        <p style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.6;">
+          🔒 Secured with TLS · Rate-limited · Session-protected
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/auth.js"></script>
+<script>
+  // Password visibility toggle
+  document.getElementById('toggle_pw').addEventListener('click', function () {
+    const pw = document.getElementById('password');
+    const isText = pw.type === 'text';
+    pw.type = isText ? 'password' : 'text';
+    this.textContent = isText ? '👁' : '🙈';
+  });
+
+  // Navbar scroll effect (not applicable here but keep for base.html compatibility)
+  window.addEventListener('scroll', () => {
+    const nb = document.querySelector('.navbar');
+    if (nb) nb.classList.toggle('scrolled', window.scrollY > 20);
+  });
+</script>
+</body>
+</html>
