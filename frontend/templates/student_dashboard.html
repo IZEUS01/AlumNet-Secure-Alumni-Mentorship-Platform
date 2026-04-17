@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Student Dashboard — AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .filter-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      gap: 0.85rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 1.5rem;
+    }
+
+    .filter-bar .form-group {
+      flex: 1;
+      min-width: 140px;
+      margin-bottom: 0;
+    }
+
+    .alumni-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .alumni-info { flex: 1; min-width: 0; }
+
+    .alumni-name {
+      font-weight: 700;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .alumni-title {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .alumni-card .alumni-bio {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .alumni-meta {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .alumni-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .request-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      transition: all 0.25s ease;
+      animation: card-in 0.35s ease both;
+    }
+
+    .request-item:hover {
+      border-color: var(--border-focus);
+    }
+
+    .request-subject { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .request-preview { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      filter: grayscale(1) opacity(0.5);
+    }
+
+    .empty-state h3 { color: var(--text-dim); font-size: 1rem; margin-bottom: 0.4rem; }
+    .empty-state p  { font-size: 0.85rem; }
+
+    /* Pulse indicator for accepting */
+    .accepting-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      display: inline-block;
+      margin-right: 4px;
+      animation: pulse-dot 2s infinite;
+    }
+  </style>
+</head>
+<body class="page-wrapper">
+
+<nav class="navbar" id="navbar">
+  <div class="container flex-between">
+    <a href="/" class="navbar-brand">
+      Alum<span>Net</span>
+      <span class="brand-dot"></span>
+    </a>
+    <ul class="navbar-nav">
+      <li>
+        <span style="font-size:0.83rem; color:var(--text-muted); padding:0 0.5rem;">
+          👤 <span id="user_name"></span>
+        </span>
+      </li>
+      <li>
+        <button class="btn btn-ghost btn-sm" data-action="logout">Sign out</button>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<main class="main-content">
+  <div class="container">
+
+    <div class="page-header" style="animation: fade-up 0.4s ease;">
+      <h1>Find a Mentor</h1>
+      <p>Browse verified GIK alumni and send personalised mentorship requests</p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="browse_tab">
+        🔍 Browse Alumni
+      </button>
+      <button class="tab-btn" data-tab="my_requests_tab">
+        📬 My Requests <span class="badge badge-cyan" id="req_count_badge" style="display:none;"></span>
+      </button>
+    </div>
+
+    <!-- Browse Tab -->
+    <div class="tab-panel active" id="browse_tab">
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <div class="form-group">
+          <label class="form-label">Department</label>
+          <input class="form-control" id="filter_dept" placeholder="e.g. Computer Science" maxlength="120" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Industry</label>
+          <input class="form-control" id="filter_industry" placeholder="e.g. Software" maxlength="120" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expertise</label>
+          <input class="form-control" id="filter_expertise" placeholder="e.g. Machine Learning" maxlength="120" />
+        </div>
+        <div class="form-group" style="min-width: 160px;">
+          <label class="form-label">Availability</label>
+          <select class="form-control" id="filter_accepting">
+            <option value="">All Alumni</option>
+            <option value="true">Accepting Mentees</option>
+            <option value="false">Not Accepting</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:flex-end; margin-bottom:0;">
+          <button class="btn btn-primary btn-sm" id="search_btn" onclick="searchAlumni(1)">Search</button>
+          <button class="btn btn-ghost btn-sm" id="reset_btn">Reset</button>
+        </div>
+      </div>
+
+      <!-- Alumni grid -->
+      <div class="alumni-grid" id="alumni_grid">
+        <div style="grid-column: 1/-1; text-align: center; padding: 3rem 0;">
+          <div class="spinner" style="margin: 0 auto 1rem;"></div>
+          <p style="font-size: 0.85rem;">Loading alumni profiles…</p>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex-between mt-3" id="pagination"></div>
+
+    </div>
+
+    <!-- My Requests Tab -->
+    <div class="tab-panel" id="my_requests_tab">
+      <div id="my_requests">
+        <div style="text-align: center; padding: 3rem 0;">
+          <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Alumni detail + request modal -->
+<div class="modal-overlay" id="modal_overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 0;">
+        <div class="alumni-avatar" id="modal_avatar" style="font-size: 1.4rem; width: 52px; height: 52px; border-radius: 13px; flex-shrink: 0;"></div>
+        <div style="min-width: 0;">
+          <h2 class="modal-title" id="modal_name">Loading…</h2>
+          <p id="modal_role" style="font-size: 0.83rem; color: var(--text-muted); margin-top: 0.15rem;"></p>
+        </div>
+      </div>
+      <button class="modal-close" id="modal_close" aria-label="Close">✕</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div style="font-size: 0.82rem;">
+        <span style="color: var(--text-muted);">Department:</span>
+        <span id="modal_dept"></span>
+      </div>
+      <div style="font-size: 0.82rem;">
+        <span style="color: var(--text-muted);">Industry:</span>
+        <span id="modal_industry"></span>
+      </div>
+      <div style="font-size: 0.82rem;">
+        <span style="color: var(--text-muted);">Experience:</span>
+        <span id="modal_yoe"></span>
+      </div>
+      <div style="font-size: 0.82rem;" id="modal_linkedin_wrap">
+        <span style="color: var(--text-muted);">LinkedIn:</span>
+        <a id="modal_linkedin" href="#" target="_blank" rel="noopener noreferrer" style="font-size: 0.82rem;">View Profile</a>
+      </div>
+    </div>
+
+    <p id="modal_bio" style="font-size: 0.88rem; color: var(--text-dim); line-height: 1.65; margin-bottom: 1rem;"></p>
+
+    <div id="modal_tags" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem;"></div>
+
+    <!-- Request form -->
+    <div id="send_request_section">
+      <div style="border-top: 1px solid var(--border); padding-top: 1.25rem;">
+        <h3 style="margin-bottom: 1rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span>✉️</span> Send Mentorship Request
+        </h3>
+        <div id="request_alert" class="alert hidden mb-2" role="alert"></div>
+        <div class="form-group">
+          <label class="form-label" for="req_subject">Subject</label>
+          <input class="form-control" id="req_subject" placeholder="What would you like help with?" maxlength="255" required />
+          <div class="form-error" id="req_subject_error"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="req_message">
+            Message
+            <span style="float:right; font-size:0.75rem; font-weight:400; color:var(--text-muted);">
+              <span id="msg_count">0</span>/2000
+            </span>
+          </label>
+          <textarea class="form-control" id="req_message" rows="4"
+            placeholder="Introduce yourself and explain what you're hoping to learn…"
+            maxlength="2000" required></textarea>
+          <div class="form-error" id="req_message_error"></div>
+        </div>
+        <button class="btn btn-primary w-full" type="button" id="request_btn" onclick="sendRequest()">
+          Send Request
+        </button>
+      </div>
+    </div>
+
+    <div id="not_accepting_msg" style="display: none; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+      <div class="alert alert-warning">
+        ⚠️ This alumni is not currently accepting mentorship requests.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/student.js"></script>
+<script>
+  // Navbar scroll
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // Message character counter
+  document.getElementById('req_message').addEventListener('input', function () {
+    document.getElementById('msg_count').textContent = this.value.length;
+  });
+
+  // Reset filters
+  document.getElementById('reset_btn').addEventListener('click', () => {
+    ['filter_dept', 'filter_industry', 'filter_expertise'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('filter_accepting').value = '';
+    searchAlumni(1);
+  });
+</script>
+</body>
+</html>
