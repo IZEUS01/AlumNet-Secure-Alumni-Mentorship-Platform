@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Create Account — AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .register-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .register-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.6), var(--shadow-glow);
+      animation: auth-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes auth-in {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 2rem;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .step.active .step-num {
+      background: var(--cyan);
+      border-color: var(--cyan);
+      color: #080c14;
+      box-shadow: 0 0 12px rgba(79,196,247,0.4);
+    }
+
+    .step.done .step-num {
+      background: var(--emerald);
+      border-color: var(--emerald);
+      color: #080c14;
+    }
+
+    .step-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .step.active .step-label { color: var(--cyan); }
+
+    .step-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      margin: 0 0.5rem;
+      transition: background 0.3s ease;
+    }
+
+    .step-line.done { background: var(--emerald); }
+
+    /* Role selector */
+    .role-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .role-option {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .role-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .role-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 0.75rem;
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      text-align: center;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+
+    .role-label:hover {
+      border-color: rgba(79,196,247,0.3);
+      background: rgba(79,196,247,0.04);
+    }
+
+    .role-option input:checked + .role-label {
+      border-color: var(--cyan);
+      background: var(--cyan-dim);
+      box-shadow: 0 0 0 1px var(--cyan);
+    }
+
+    .role-icon { font-size: 1.5rem; }
+
+    .role-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .role-desc {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .alumni-fields-section {
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    }
+
+    .alumni-fields-section.visible {
+      max-height: 400px;
+      opacity: 1;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 1rem;
+    }
+
+    .pw-toggle { position: relative; }
+    .pw-toggle .pw-eye {
+      position: absolute;
+      right: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      transition: color var(--t-fast);
+    }
+    .pw-toggle .pw-eye:hover { color: var(--cyan); }
+    .pw-toggle .form-control  { padding-right: 2.75rem; }
+  </style>
+</head>
+<body>
+<div class="register-page">
+  <div class="register-card">
+
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+      <div class="auth-logo">Alum<span>Net</span></div>
+      <p class="auth-tagline">Create your secure account</p>
+    </div>
+
+    <div id="register_alert" class="alert hidden mb-2" role="alert"></div>
+
+    <form id="register_form" novalidate autocomplete="on">
+
+      <!-- Role selection -->
+      <div class="form-group">
+        <label class="form-label">I am a …</label>
+        <div class="role-selector">
+          <label class="role-option">
+            <input type="radio" id="role_student" name="role" value="student" checked />
+            <span class="role-label">
+              <span class="role-icon">🎓</span>
+              <span class="role-title">Student</span>
+              <span class="role-desc">Looking for mentors</span>
+            </span>
+          </label>
+          <label class="role-option">
+            <input type="radio" id="role_alumni" name="role" value="alumni" />
+            <span class="role-label">
+              <span class="role-icon">💼</span>
+              <span class="role-title">Alumni</span>
+              <span class="role-desc">Offer mentorship</span>
+            </span>
+          </label>
+        </div>
+        <div class="form-error" id="role_error" role="alert"></div>
+      </div>
+
+      <!-- Base fields -->
+      <div class="form-group">
+        <label class="form-label" for="full_name">Full Name</label>
+        <input class="form-control" type="text" id="full_name" name="full_name"
+               autocomplete="name" placeholder="Muhammad Ali" required maxlength="255" />
+        <div class="form-error" id="full_name_error" role="alert"></div>
+      </div>
+
+      <div class="field-grid">
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <input class="form-control" type="text" id="username" name="username"
+                 autocomplete="username" placeholder="m.ali" required maxlength="80"
+                 pattern="[a-zA-Z0-9_.]{3,80}" />
+          <div class="form-error" id="username_error" role="alert"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Email Address</label>
+          <input class="form-control" type="email" id="email" name="email"
+                 autocomplete="email" placeholder="you@giki.edu.pk" required maxlength="254" />
+          <div class="form-error" id="email_error" role="alert"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <div class="pw-toggle">
+          <input class="form-control" type="password" id="password" name="password"
+                 autocomplete="new-password" placeholder="Min 8 chars, upper, digit, special" required maxlength="128" />
+          <button class="pw-eye" type="button" id="toggle_pw" aria-label="Toggle password visibility">👁</button>
+        </div>
+        <div class="password-strength" id="pw_strength_wrap" style="display:none;">
+          <div class="password-strength-bar" id="pw_strength_bar"></div>
+        </div>
+        <div class="form-error" id="password_error" role="alert"></div>
+      </div>
+
+      <!-- Alumni extra fields — animated reveal -->
+      <div class="alumni-fields-section" id="alumni_fields">
+        <div class="field-grid">
+          <div class="form-group">
+            <label class="form-label" for="department">Department</label>
+            <input class="form-control" type="text" id="department" placeholder="Computer Science" maxlength="120" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="degree_program">Degree Program</label>
+            <input class="form-control" type="text" id="degree_program" placeholder="BS Computer Science" maxlength="150" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="graduation_year">Graduation Year</label>
+            <input class="form-control" type="number" id="graduation_year" placeholder="2022" min="2000" max="2030" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="roll_number">Roll Number</label>
+            <input class="form-control" type="text" id="roll_number" placeholder="2019-CS-001" maxlength="30" />
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary w-full btn-lg" type="submit" id="register_btn" style="margin-top: 0.5rem;">
+        Create Account
+      </button>
+    </form>
+
+    <div class="auth-switch">
+      Already have an account? <a href="/templates/login.html">Sign in</a>
+    </div>
+
+    <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); text-align: center;">
+      <p style="font-size: 0.72rem; color: var(--text-muted);">
+        🔒 Your data is encrypted and never shared with third parties
+      </p>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/auth.js"></script>
+<script>
+  // Role toggle — animated reveal of alumni fields
+  document.querySelectorAll('input[name="role"]').forEach(radio => {
+    radio.addEventListener('change', function () {
+      const section = document.getElementById('alumni_fields');
+      section.classList.toggle('visible', this.value === 'alumni');
+
+      // Toggle required on alumni fields
+      ['department', 'degree_program', 'graduation_year'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.required = this.value === 'alumni';
+      });
+    });
+  });
+
+  // Password strength meter
+  document.getElementById('password').addEventListener('input', function () {
+    const val = this.value;
+    const wrap = document.getElementById('pw_strength_wrap');
+    const bar  = document.getElementById('pw_strength_bar');
+
+    if (!val) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    let score = 0;
+    if (val.length >= 8)               score++;
+    if (/[A-Z]/.test(val))             score++;
+    if (/[0-9]/.test(val))             score++;
+    if (/[^A-Za-z0-9]/.test(val))      score++;
+
+    const colors = ['', '#fb7185', '#fbbf24', '#34d399', '#4fc4f7'];
+    const widths = ['0%', '25%', '50%', '75%', '100%'];
+    bar.style.width     = widths[score];
+    bar.style.background = colors[score];
+  });
+
+  // Password toggle
+  document.getElementById('toggle_pw').addEventListener('click', function () {
+    const pw = document.getElementById('password');
+    const isText = pw.type === 'text';
+    pw.type = isText ? 'password' : 'text';
+    this.textContent = isText ? '👁' : '🙈';
+  });
+</script>
+</body>
+</html>
