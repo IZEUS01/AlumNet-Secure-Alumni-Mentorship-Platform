@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel — AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="page-wrapper">
+
+  <nav class="navbar">
+    <div class="container flex-between">
+      <a href="#" class="navbar-brand">Alum<span>Net</span> <span style="font-size:0.7rem; color:var(--warning); margin-left:0.4rem; font-family:'DM Sans',sans-serif; font-weight:600">ADMIN</span></a>
+      <ul class="navbar-nav">
+        <li><span style="font-size:0.85rem; color:var(--text-muted); padding:0 0.5rem">👤 <span id="user_name"></span></span></li>
+        <li><button class="btn btn-ghost btn-sm" data-action="logout">Sign out</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="container">
+
+      <div class="page-header">
+        <h1>Admin Panel</h1>
+        <p>Manage verifications and users</p>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid mb-3" id="stats_grid">
+        <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value accent" id="stat_total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value" id="stat_students">—</div></div>
+        <div class="stat-card"><div class="stat-label">Verified Alumni</div><div class="stat-value" id="stat_verified">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pending Review</div><div class="stat-value" id="stat_pending">—</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="pending_tab">Pending Verification</button>
+        <button class="tab-btn" data-tab="users_tab">All Users</button>
+      </div>
+
+      <!-- Tab: Pending alumni verification -->
+      <div class="tab-panel active" id="pending_tab">
+        <div id="pending_alert" class="alert hidden mb-2"></div>
+        <div class="table-wrap">
+          <table id="pending_table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Grad Year</th>
+                <th>Roll No.</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pending_body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex-between mt-2" id="pending_pagination"></div>
+      </div>
+
+      <!-- Tab: All users -->
+      <div class="tab-panel" id="users_tab">
+        <div class="flex-between mb-2">
+          <div class="flex-center gap-sm">
+            <select class="form-control" id="users_role_filter" style="width:auto">
+              <option value="">All roles</option>
+              <option value="student">Student</option>
+              <option value="verified_alumni">Verified Alumni</option>
+              <option value="unverified_alumni">Unverified Alumni</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="loadUsers(1)">Filter</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users_body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex-between mt-2" id="users_pagination"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Reject modal -->
+  <div class="modal-overlay" id="reject_modal_overlay">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h2 style="font-size:1.1rem">Reject Verification</h2>
+        <button class="modal-close" onclick="closeRejectModal()">✕</button>
+      </div>
+      <p class="text-muted mb-2" style="font-size:0.88rem">Please provide a reason. This will be shown to the alumni.</p>
+      <div class="form-group">
+        <label class="form-label">Reason</label>
+        <textarea class="form-control" id="reject_reason" rows="3" maxlength="500" placeholder="e.g. Documents do not match registration details."></textarea>
+      </div>
+      <div id="reject_alert" class="alert hidden mb-2"></div>
+      <div class="flex-center gap-sm">
+        <button class="btn btn-danger" id="reject_confirm_btn" onclick="confirmReject()">Confirm Rejection</button>
+        <button class="btn btn-ghost" onclick="closeRejectModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js"></script>
+  <script>
+    let adminUser   = null;
+    let rejectTarget = null;
+
+    /* ---- Init ---- */
+    document.addEventListener('DOMContentLoaded', async () => {
+      adminUser = await requireAuth(['admin']);
+      if (!adminUser) return;
+      document.getElementById('user_name').textContent = adminUser.full_name;
+      await loadStats();
+      await loadPending(1);
+      bindTabs();
+
+      document.getElementById('users_role_filter').addEventListener('change', () => loadUsers(1));
+    });
+
+    /* ---- Stats ---- */
+    async function loadStats() {
+      try {
+        const res  = await fetch('/admin/stats', { credentials: 'include' });
+        const data = await res.json();
+        document.getElementById('stat_total').textContent    = data.total_users ?? '—';
+        document.getElementById('stat_students').textContent = data.total_students ?? '—';
+        document.getElementById('stat_verified').textContent = data.total_verified_alumni ?? '—';
+        document.getElementById('stat_pending').textContent  = data.total_unverified_alumni ?? '—';
+      } catch { /* non-critical */ }
+    }
+
+    /* ---- Pending verification ---- */
+    async function loadPending(page = 1) {
+      const tbody = document.getElementById('pending_body');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem"><div class="spinner" style="margin:auto"></div></td></tr>';
+
+      try {
+        const res  = await fetch(`/admin/alumni/pending?page=${page}`, { credentials: 'include' });
+        const data = await res.json();
+        const list = data.alumni || [];
+
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No pending verifications.</td></tr>';
+          document.getElementById('pending_pagination').innerHTML = '';
+          return;
+        }
+
+        tbody.innerHTML = list.map(a => `
+          <tr id="row_${a.id}">
+            <td><strong>${esc(a.full_name)}</strong></td>
+            <td class="text-muted">${esc(a.email)}</td>
+            <td>${esc(a.department)}</td>
+            <td>${a.graduation_year || '—'}</td>
+            <td class="text-muted">${esc(a.gik_roll_number) || '—'}</td>
+            <td>
+              <div class="flex-center gap-sm">
+                <button class="btn btn-success btn-sm" onclick="verifyAlumni(${a.id})">Verify</button>
+                <button class="btn btn-danger btn-sm"  onclick="openRejectModal(${a.id})">Reject</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        renderPagination('pending_pagination', data.total, page, data.pages, 'loadPending');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center" style="padding:2rem">Failed to load.</td></tr>';
+      }
+    }
+
+    async function verifyAlumni(alumniId) {
+      if (!confirm('Verify this alumni account?')) return;
+      try {
+        const res  = await fetch(`/admin/alumni/${alumniId}/verify`, { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Failed.'); return; }
+        document.getElementById(`row_${alumniId}`)?.remove();
+        await loadStats();
+      } catch { alert('Network error.'); }
+    }
+
+    function openRejectModal(alumniId) {
+      rejectTarget = alumniId;
+      document.getElementById('reject_reason').value = '';
+      document.getElementById('reject_alert').classList.add('hidden');
+      document.getElementById('reject_modal_overlay').classList.add('open');
+    }
+
+    function closeRejectModal() {
+      document.getElementById('reject_modal_overlay').classList.remove('open');
+      rejectTarget = null;
+    }
+
+    async function confirmReject() {
+      const reason = document.getElementById('reject_reason').value.trim();
+      const alert  = document.getElementById('reject_alert');
+      const btn    = document.getElementById('reject_confirm_btn');
+      if (!reason) { showAlertEl(alert, 'A reason is required.'); return; }
+
+      btn.disabled = true; btn.textContent = 'Rejecting…';
+
+      try {
+        const res  = await fetch(`/admin/alumni/${rejectTarget}/reject`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showAlertEl(alert, data.error || 'Failed.'); return; }
+        closeRejectModal();
+        document.getElementById(`row_${rejectTarget}`)?.remove();
+        await loadStats();
+      } catch { showAlertEl(alert, 'Network error.'); }
+      finally { btn.disabled = false; btn.textContent = 'Confirm Rejection'; }
+    }
+
+    /* ---- All users ---- */
+    async function loadUsers(page = 1) {
+      const tbody = document.getElementById('users_body');
+      const role  = document.getElementById('users_role_filter').value;
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem"><div class="spinner" style="margin:auto"></div></td></tr>';
+
+      const params = new URLSearchParams({ page, per_page: 25 });
+      if (role) params.set('role', role);
+
+      try {
+        const res  = await fetch(`/admin/users?${params}`, { credentials: 'include' });
+        const data = await res.json();
+        const list = data.users || [];
+
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No users found.</td></tr>';
+          document.getElementById('users_pagination').innerHTML = '';
+          return;
+        }
+
+        tbody.innerHTML = list.map(u => `
+          <tr>
+            <td><strong>${esc(u.full_name)}</strong></td>
+            <td class="text-muted">${esc(u.email)}</td>
+            <td>${roleBadge(u.role)}</td>
+            <td>${u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
+            <td class="text-muted" style="font-size:0.82rem">${new Date(u.created_at).toLocaleDateString()}</td>
+            <td>
+              ${u.role !== 'admin' && u.is_active
+                ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id}, this)">Deactivate</button>`
+                : '<span class="text-muted" style="font-size:0.82rem">—</span>'}
+            </td>
+          </tr>
+        `).join('');
+
+        renderPagination('users_pagination', data.total, page, data.pages, 'loadUsers');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center" style="padding:2rem">Failed to load.</td></tr>';
+      }
+    }
+
+    async function deactivateUser(userId, btn) {
+      if (!confirm('Deactivate this user account? They will no longer be able to log in.')) return;
+      btn.disabled = true;
+      try {
+        const res  = await fetch(`/admin/users/${userId}/deactivate`, { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Failed.'); btn.disabled = false; return; }
+        btn.closest('tr').querySelector('td:nth-child(4)').innerHTML = '<span class="badge badge-danger">Inactive</span>';
+        btn.remove();
+        await loadStats();
+      } catch { alert('Network error.'); btn.disabled = false; }
+    }
+
+    /* ---- Tabs ---- */
+    function bindTabs() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          const panel = document.getElementById(btn.dataset.tab);
+          if (panel) panel.classList.add('active');
+          if (btn.dataset.tab === 'users_tab') loadUsers(1);
+        });
+      });
+    }
+
+    /* ---- Helpers ---- */
+    function esc(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function roleBadge(role) {
+      const map = {
+        student: 'info', verified_alumni: 'success',
+        unverified_alumni: 'warning', admin: 'danger'
+      };
+      const label = { student:'Student', verified_alumni:'Verified Alumni', unverified_alumni:'Unverified Alumni', admin:'Admin' };
+      return `<span class="badge badge-${map[role]||'muted'}">${label[role]||role}</span>`;
+    }
+
+    function renderPagination(containerId, total, page, pages, fnName) {
+      const el = document.getElementById(containerId);
+      if (!el || pages <= 1) { if (el) el.innerHTML = ''; return; }
+      el.innerHTML = `
+        <button class="btn btn-ghost btn-sm" onclick="${fnName}(${page-1})" ${page<=1?'disabled':''}>← Prev</button>
+        <span class="text-muted" style="font-size:0.85rem">Page ${page} of ${pages} · ${total} records</span>
+        <button class="btn btn-ghost btn-sm" onclick="${fnName}(${page+1})" ${page>=pages?'disabled':''}>Next →</button>
+      `;
+    }
+
+    function showAlertEl(el, msg, type = 'danger') {
+      el.className = `alert alert-${type}`;
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
