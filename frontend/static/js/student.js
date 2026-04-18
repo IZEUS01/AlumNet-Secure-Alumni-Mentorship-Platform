@@ -37,7 +37,7 @@ async function loadAlumni(page = 1) {
 
   try {
     const res = await fetch(`/student/alumni?${params}`, { credentials: 'include' });
-    if (res.status === 401) { window.location.href = '/templates/login.html'; return; }
+    if (res.status === 401) { window.location.href = '/login'; return; }
     const data = await res.json();
     alumniData  = data.alumni || [];
     totalPages  = data.pages  || 1;
