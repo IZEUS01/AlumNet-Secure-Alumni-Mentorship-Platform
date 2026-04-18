@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Alumni Dashboard — AlumNet</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .profile-header-card {
+      background: linear-gradient(135deg, var(--bg-card), var(--bg-1));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 1.75rem;
+      position: relative;
+      overflow: hidden;
+      animation: fade-up 0.4s ease;
+    }
+
+    .profile-header-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--emerald));
+    }
+
+    .profile-header-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--cyan-dim), rgba(52,211,153,0.2));
+      border: 1px solid var(--border-focus);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+      flex-shrink: 0;
+    }
+
+    .profile-header-info h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+
+    .profile-header-info p {
+      font-size: 0.83rem;
+      color: var(--text-muted);
+    }
+
+    /* Inbox request items */
+    .inbox-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 0.85rem;
+      transition: all 0.25s ease;
+      animation: card-in 0.35s ease both;
+    }
+
+    .inbox-item:hover {
+      border-color: var(--border-focus);
+      transform: translateX(4px);
+    }
+
+    .inbox-student-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .inbox-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: var(--cyan-dim);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--cyan);
+      font-family: 'Syne', sans-serif;
+      flex-shrink: 0;
+    }
+
+    .inbox-subject {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .inbox-message {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 0.85rem;
+    }
+
+    .inbox-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    /* Doc upload drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: var(--bg-input);
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--border-focus);
+      background: var(--cyan-dim);
+    }
+
+    .drop-zone p { font-size: 0.85rem; margin-top: 0.5rem; }
+
+    .doc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .doc-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.83rem;
+    }
+
+    .doc-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .doc-name { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-date { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
+
+    .accepting-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 1.1rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Toggle switch */
+    .toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--border);
+      border-radius: 12px;
+      transition: background 0.25s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.25s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--emerald); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+  </style>
+</head>
+<body class="page-wrapper">
+
+<nav class="navbar" id="navbar">
+  <div class="container flex-between">
+    <a href="/" class="navbar-brand">
+      Alum<span>Net</span>
+      <span class="brand-dot"></span>
+    </a>
+    <ul class="navbar-nav">
+      <li>
+        <span style="font-size: 0.83rem; color: var(--text-muted); padding: 0 0.5rem;">
+          👋 <span id="user_name"></span>
+        </span>
+      </li>
+      <li>
+        <button class="btn btn-ghost btn-sm" data-action="logout">Sign out</button>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<main class="main-content">
+  <div class="container">
+
+    <!-- Pending verification banner -->
+    <div class="pending-banner hidden" id="pending_banner">
+      ⏳ Your alumni profile is pending admin verification. You can update your profile and upload documents while you wait.
+    </div>
+
+    <!-- Profile header -->
+    <div class="profile-header-card" id="profile_header">
+      <div class="profile-header-avatar" id="header_avatar">👤</div>
+      <div class="profile-header-info">
+        <h2 id="header_name">Loading…</h2>
+        <p id="header_subtitle">—</p>
+      </div>
+      <div style="margin-left: auto;">
+        <span id="header_badge" class="badge badge-amber">Pending</span>
+      </div>
+    </div>
+
+    <div class="page-header" style="padding-top: 0; border-top: none; margin-bottom: 1.5rem;">
+      <h1>Alumni Dashboard</h1>
+      <p>Manage your profile, mentorship inbox, and verification documents</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="profile_tab">👤 My Profile</button>
+      <button class="tab-btn" data-tab="inbox_tab" id="inbox_tab_btn">
+        📬 Mentorship Inbox
+        <span class="badge badge-amber" id="inbox_badge" style="display:none; margin-left: 4px;"></span>
+      </button>
+      <button class="tab-btn" data-tab="docs_tab">📎 Verification</button>
+    </div>
+
+    <!-- Profile Tab -->
+    <div class="tab-panel active" id="profile_tab">
+      <div class="card" style="max-width: 680px;">
+        <div class="card-title">
+          <div class="card-icon">✏️</div>
+          Professional Profile
+        </div>
+
+        <div id="profile_alert" class="alert hidden mb-2" role="alert"></div>
+
+        <div class="accepting-toggle-row">
+          <div>
+            <div style="font-size: 0.875rem; font-weight: 600; color: var(--text);">Accepting Mentorship Requests</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
+              Students will be able to send you requests when enabled
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prof_accepting" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <form id="profile_form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.25rem;">
+            <div class="form-group">
+              <label class="form-label" for="prof_company">Current Company</label>
+              <input class="form-control" id="prof_company" placeholder="Acme Corp" maxlength="200" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof_title">Job Title</label>
+              <input class="form-control" id="prof_title" placeholder="Senior Engineer" maxlength="150" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof_industry">Industry</label>
+              <input class="form-control" id="prof_industry" placeholder="Software / Finance / …" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof_yoe">Years of Experience</label>
+              <input class="form-control" type="number" id="prof_yoe" min="0" max="60" placeholder="3" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="prof_linkedin">LinkedIn URL</label>
+            <input class="form-control" id="prof_linkedin" type="url"
+                   placeholder="https://www.linkedin.com/in/your-profile" maxlength="300" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="prof_bio">
+              Bio
+              <span style="float:right; font-size: 0.72rem; font-weight: 400; color: var(--text-muted);">
+                <span id="bio_count">0</span>/1000
+              </span>
+            </label>
+            <textarea class="form-control" id="prof_bio" rows="3" maxlength="1000"
+                      placeholder="A short introduction for students — your background, what you do, and what you like to help with…"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="prof_expertise">
+              Expertise Areas
+              <span style="float:right; font-size: 0.72rem; font-weight: 400; color: var(--text-muted);">comma-separated</span>
+            </label>
+            <input class="form-control" id="prof_expertise" placeholder="Machine Learning, Web Dev, Cloud" maxlength="500" />
+            <div id="expertise_preview" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem;"></div>
+          </div>
+
+          <button class="btn btn-primary" type="submit" id="profile_btn">
+            Save Profile
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Inbox Tab -->
+    <div class="tab-panel" id="inbox_tab">
+      <div class="flex-between mb-3">
+        <h3 style="font-size: 1rem;">Mentorship Requests</h3>
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <label class="form-label" style="margin: 0; font-size: 0.78rem;">Filter:</label>
+          <select class="form-control" id="req_status_filter" style="width: auto;" onchange="loadRequests()">
+            <option value="pending">Pending</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+      <div id="requests_list">
+        <div style="text-align: center; padding: 3rem 0;">
+          <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Docs Tab -->
+    <div class="tab-panel" id="docs_tab">
+      <div class="card" style="max-width: 640px;">
+        <div class="card-title">
+          <div class="card-icon">📋</div>
+          Verification Status
+        </div>
+        <div id="doc_status">
+          <div style="text-align: center; padding: 1.5rem;">
+            <div class="spinner" style="margin: 0 auto;"></div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 0.5rem;">
+          <h3 style="font-size: 1rem; margin-bottom: 1rem;">Upload Verification Document</h3>
+          <div id="upload_alert" class="alert hidden mb-2" role="alert"></div>
+
+          <div class="form-group">
+            <label class="form-label" for="doc_type">Document Type</label>
+            <select class="form-control" id="doc_type">
+              <option value="degree_certificate">Degree Certificate</option>
+              <option value="transcript">Transcript</option>
+              <option value="employment_letter">Employment Letter</option>
+              <option value="national_id">National ID</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <!-- Drop zone -->
+          <div class="drop-zone" id="drop_zone" onclick="document.getElementById('doc_file').click()">
+            <div style="font-size: 2rem;">📁</div>
+            <p><strong style="color: var(--cyan);">Click to select</strong> or drag & drop</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              PDF, JPG, PNG · Max 5 MB
+            </p>
+          </div>
+          <input type="file" id="doc_file" accept=".pdf,.jpg,.jpeg,.png"
+                 style="display: none;" onchange="handleFileSelect()" />
+
+          <div id="file_preview" style="display: none; margin-top: 0.75rem;">
+            <div class="doc-item">
+              <span class="doc-icon" id="preview_icon">📄</span>
+              <span class="doc-name" id="preview_name"></span>
+              <span class="doc-date" id="preview_size"></span>
+              <button class="btn btn-ghost btn-sm" onclick="clearFile()">✕</button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-sm mt-2" id="upload_btn" onclick="uploadDocument()" style="margin-top: 1rem;">
+            Upload Document
+          </button>
+        </div>
+
+        <!-- Uploaded docs list -->
+        <div id="uploaded_docs_wrap" style="border-top: 1px solid var(--border); padding-top: 1.25rem; margin-top: 1.25rem; display: none;">
+          <h3 style="font-size: 0.9rem; margin-bottom: 0.85rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
+            Uploaded Documents
+          </h3>
+          <div class="doc-list" id="uploaded_docs"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/alumni.js"></script>
+<script>
+  // Navbar scroll
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // Bio counter
+  document.getElementById('prof_bio').addEventListener('input', function () {
+    document.getElementById('bio_count').textContent = this.value.length;
+  });
+
+  // Expertise live preview
+  document.getElementById('prof_expertise').addEventListener('input', function () {
+    const preview = document.getElementById('expertise_preview');
+    const tags = this.value.split(',').map(t => t.trim()).filter(Boolean);
+    preview.innerHTML = tags.map(t => `<span class="tag">${sanitizeHTML(t)}</span>`).join('');
+  });
+
+  function sanitizeHTML(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  // Drop zone drag handlers
+  const dropZone = document.getElementById('drop_zone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length) {
+      document.getElementById('doc_file').files = files;
+      handleFileSelect();
+    }
+  });
+
+  function handleFileSelect() {
+    const file = document.getElementById('doc_file').files[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    const icons = { pdf: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' };
+    const preview = document.getElementById('file_preview');
+    document.getElementById('preview_icon').textContent = icons[ext] || '📎';
+    document.getElementById('preview_name').textContent = file.name;
+    document.getElementById('preview_size').textContent = (file.size / 1024).toFixed(0) + ' KB';
+    preview.style.display = 'block';
+  }
+
+  function clearFile() {
+    document.getElementById('doc_file').value = '';
+    document.getElementById('file_preview').style.display = 'none';
+  }
+
+  async function uploadDocument() {
+    const alertEl = document.getElementById('upload_alert');
+    const btn     = document.getElementById('upload_btn');
+    const file    = document.getElementById('doc_file').files[0];
+    const type    = document.getElementById('doc_type').value;
+
+    if (!file) {
+      alertEl.className = 'alert alert-warning';
+      alertEl.textContent = 'Please select a file to upload.';
+      alertEl.classList.remove('hidden');
+      return;
+    }
+
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (!allowed.includes(file.type)) {
+      alertEl.className = 'alert alert-danger';
+      alertEl.textContent = 'Invalid file type. Only PDF, JPG, and PNG are accepted.';
+      alertEl.classList.remove('hidden');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alertEl.className = 'alert alert-danger';
+      alertEl.textContent = 'File exceeds the 5 MB limit.';
+      alertEl.classList.remove('hidden');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', type);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-sm"></span> Uploading…';
+    alertEl.classList.add('hidden');
+
+    try {
+      const res  = await fetch('/alumni/verification/upload', {
+        method: 'POST', credentials: 'include', body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = data.error || 'Upload failed.';
+        alertEl.classList.remove('hidden');
+        return;
+      }
+      alertEl.className = 'alert alert-success';
+      alertEl.textContent = '✓ Document uploaded successfully.';
+      alertEl.classList.remove('hidden');
+      clearFile();
+      if (typeof loadDocumentStatus === 'function') loadDocumentStatus();
+    } catch {
+      alertEl.className = 'alert alert-danger';
+      alertEl.textContent = 'Network error. Please try again.';
+      alertEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Upload Document';
+    }
+  }
+</script>
+</body>
+</html>
