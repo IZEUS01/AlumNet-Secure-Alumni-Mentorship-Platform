@@ -1,170 +1,132 @@
 """
-models/mentorship.py
---------------------
-MentorshipRequest — represents a student's request for mentorship
-from a specific verified alumni.
+routes/mentorship.py
+---------------------
+Mentorship request endpoints for both students and verified alumni.
 
-Business rules enforced at the model level:
-    - A student cannot send duplicate pending requests to the same alumni
-    - Only verified alumni can receive requests (enforced in the service layer)
-    - Status transitions are controlled and logged
-
-Security notes:
-    RBAC-02  — student_id always refers to a Student record
-    RBAC-03  — alumni_id always refers to a verified Alumni record
-    APP-06   — All status changes tracked with timestamps
-    DATA-01  — Message content stored server-side; not exposed cross-role
+Security controls:
+    RBAC-02  — Students can only send requests to verified alumni
+    RBAC-03  — Unverified alumni cannot receive or respond to requests
+    RBAC-04  — Only verified alumni can respond (accept/reject)
+    APP-01   — All inputs validated server-side via service layer
+    APP-05   — Generic error messages
+    APP-06   — All state changes logged
 """
 
-from datetime import datetime, timezone
-from app import db
+from flask import Blueprint, request, jsonify
+from flask_login import current_user
+
+from auth.decorators import role_required, login_required_json
+from rbac.roles import Role
+from services.mentorship import (
+    send_mentorship_request,
+    withdraw_mentorship_request,
+    get_student_requests,
+    get_alumni_requests,
+)
+
+mentorship_bp = Blueprint("mentorship", __name__)
 
 
-class MentorshipRequest(db.Model):
-    __tablename__ = "mentorship_requests"
+# ------------------------------------------------------------------ #
+# POST /mentorship/request  — student sends a request
+# ------------------------------------------------------------------ #
 
-    # Unique constraint: one pending request per (student, alumni) pair
-    __table_args__ = (
-        db.UniqueConstraint(
-            "student_id", "alumni_id", "status",
-            name="uq_mentorship_student_alumni_status",
-        ),
-    )
+@mentorship_bp.route("/request", methods=["POST"])
+@login_required_json
+@role_required(Role.STUDENT)
+def create_request():
+    """
+    Student sends a mentorship request to a verified alumni.
+    Service layer enforces: verification check, duplicate prevention,
+    capacity check, and input sanitisation (APP-01, RBAC-02, RBAC-03).
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request body."}), 400
 
-    # ------------------------------------------------------------------ #
-    # Primary key
-    # ------------------------------------------------------------------ #
-    id = db.Column(db.Integer, primary_key=True)
+    alumni_id = data.get("alumni_id")
+    subject   = data.get("subject", "")
+    message   = data.get("message", "")
 
-    # ------------------------------------------------------------------ #
-    # Foreign keys
-    # ------------------------------------------------------------------ #
-    student_id = db.Column(
-        db.Integer,
-        db.ForeignKey("students.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    alumni_id = db.Column(
-        db.Integer,
-        db.ForeignKey("alumni.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    if not alumni_id:
+        return jsonify({"error": "alumni_id is required."}), 400
 
-    # ------------------------------------------------------------------ #
-    # Request content
-    # ------------------------------------------------------------------ #
-    subject = db.Column(db.String(255), nullable=False)
-    message = db.Column(db.Text,        nullable=False)    # Student's introduction/ask
-
-    # ------------------------------------------------------------------ #
-    # Status lifecycle
-    # pending → accepted | rejected | withdrawn
-    # ------------------------------------------------------------------ #
-    status = db.Column(
-        db.Enum(
-            "pending",
-            "accepted",
-            "rejected",
-            "withdrawn",
-            name="mentorship_status",
-        ),
-        default="pending",
-        nullable=False,
-        index=True,
-    )
-
-    # Alumni response note (reason for rejection, or welcome message)
-    response_note = db.Column(db.Text, nullable=True)
-
-    # ------------------------------------------------------------------ #
-    # Scheduled session (set when accepted)
-    # ------------------------------------------------------------------ #
-    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    # ------------------------------------------------------------------ #
-    # Audit timestamps  (APP-06)
-    # ------------------------------------------------------------------ #
-    created_at    = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
-    responded_at  = db.Column(db.DateTime(timezone=True), nullable=True)
-    withdrawn_at  = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    # ------------------------------------------------------------------ #
-    # Relationships
-    # ------------------------------------------------------------------ #
-    student = db.relationship(
-        "Student",
-        back_populates="mentorship_requests",
-        foreign_keys=[student_id],
-    )
-    alumni = db.relationship(
-        "Alumni",
-        back_populates="mentorship_requests",
-        foreign_keys=[alumni_id],
-    )
-
-    # ------------------------------------------------------------------ #
-    # Status transition helpers
-    # ------------------------------------------------------------------ #
-
-    def accept(self, response_note: str = None, scheduled_at=None) -> None:
-        """Mark the request as accepted by alumni."""
-        self.status        = "accepted"
-        self.response_note = response_note
-        self.scheduled_at  = scheduled_at
-        self.responded_at  = datetime.now(timezone.utc)
-
-    def reject(self, response_note: str = None) -> None:
-        """Mark the request as rejected by alumni."""
-        self.status        = "rejected"
-        self.response_note = response_note
-        self.responded_at  = datetime.now(timezone.utc)
-
-    def withdraw(self) -> None:
-        """Student withdraws the request."""
-        self.status       = "withdrawn"
-        self.withdrawn_at = datetime.now(timezone.utc)
-
-    # ------------------------------------------------------------------ #
-    # Serialisation helpers
-    # ------------------------------------------------------------------ #
-
-    def to_student_dict(self) -> dict:
-        """View for the requesting student."""
-        return {
-            "id":            self.id,
-            "alumni_name":   self.alumni.user.full_name,
-            "alumni_company": self.alumni.current_company,
-            "subject":       self.subject,
-            "message":       self.message,
-            "status":        self.status,
-            "response_note": self.response_note,
-            "scheduled_at":  self.scheduled_at.isoformat() if self.scheduled_at else None,
-            "created_at":    self.created_at.isoformat(),
-        }
-
-    def to_alumni_dict(self) -> dict:
-        """View for the receiving alumni."""
-        return {
-            "id":             self.id,
-            "student_name":   self.student.user.full_name,
-            "student_dept":   self.student.department,
-            "student_program": self.student.degree_program,
-            "subject":        self.subject,
-            "message":        self.message,
-            "status":         self.status,
-            "scheduled_at":   self.scheduled_at.isoformat() if self.scheduled_at else None,
-            "created_at":     self.created_at.isoformat(),
-        }
-
-    def __repr__(self) -> str:
-        return (
-            f"<MentorshipRequest id={self.id} "
-            f"student={self.student_id} alumni={self.alumni_id} "
-            f"status={self.status!r}>"
+    try:
+        req = send_mentorship_request(
+            student_user_id=current_user.id,
+            alumni_id=alumni_id,
+            subject=subject,
+            message=message,
         )
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 422
+
+    return jsonify({
+        "message": "Mentorship request sent.",
+        "request_id": req.id,
+        "status": req.status,
+    }), 201
+
+
+# ------------------------------------------------------------------ #
+# GET /mentorship/my-requests  — student views their own requests
+# ------------------------------------------------------------------ #
+
+@mentorship_bp.route("/my-requests", methods=["GET"])
+@login_required_json
+@role_required(Role.STUDENT)
+def my_requests():
+    """Return all mentorship requests sent by the current student."""
+    status = request.args.get("status", None)
+    valid  = {"pending", "accepted", "rejected", "withdrawn", None}
+    if status not in valid:
+        return jsonify({"error": "Invalid status filter."}), 400
+
+    reqs = get_student_requests(current_user.id, status=status)
+    return jsonify({
+        "requests": [r.to_student_dict() for r in reqs],
+        "count":    len(reqs),
+    }), 200
+
+
+# ------------------------------------------------------------------ #
+# POST /mentorship/withdraw/<request_id>  — student withdraws a request
+# ------------------------------------------------------------------ #
+
+@mentorship_bp.route("/withdraw/<int:request_id>", methods=["POST"])
+@login_required_json
+@role_required(Role.STUDENT)
+def withdraw_request(request_id):
+    """Student withdraws their own pending request."""
+    try:
+        req = withdraw_mentorship_request(current_user.id, request_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 422
+
+    return jsonify({"message": "Request withdrawn.", "status": req.status}), 200
+
+
+# ------------------------------------------------------------------ #
+# GET /mentorship/inbox  — alumni views incoming requests (RBAC-04)
+# ------------------------------------------------------------------ #
+
+@mentorship_bp.route("/inbox", methods=["GET"])
+@login_required_json
+@role_required(Role.VERIFIED_ALUMNI)
+def inbox():
+    """
+    Verified alumni views their mentorship inbox.
+    Unverified alumni are blocked (RBAC-03, RBAC-04).
+    """
+    status = request.args.get("status", "pending")
+    valid  = {"pending", "accepted", "rejected", "withdrawn"}
+    if status not in valid:
+        return jsonify({"error": "Invalid status filter."}), 400
+
+    reqs = get_alumni_requests(current_user.id, status=status)
+    return jsonify({
+        "requests": [r.to_alumni_dict() for r in reqs],
+        "count":    len(reqs),
+    }), 200
