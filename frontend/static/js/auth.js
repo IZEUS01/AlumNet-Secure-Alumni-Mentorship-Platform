@@ -68,9 +68,9 @@ async function handleLogin(e) {
 
     // Redirect based on role
     const role = data.user?.role;
-    if (role === 'admin')            window.location.href = '/templates/admin_panel.html';
-    else if (role === 'student')     window.location.href = '/templates/student_dashboard.html';
-    else                             window.location.href = '/templates/alumni_dashboard.html';
+    if (role === 'admin')            window.location.href = '/admin/dashboard';
+    else if (role === 'student')     window.location.href = '/student/dashboard';
+    else                             window.location.href = '/alumni/dashboard';
 
   } catch {
     showAlert(alert, 'Network error. Please try again.');
@@ -129,7 +129,7 @@ async function handleRegister(e) {
       : 'Account created! You can now log in.';
     showAlert(alert, msg, 'success');
 
-    setTimeout(() => { window.location.href = '/templates/login.html'; }, 2000);
+    setTimeout(() => { window.location.href = '/login'; }, 2000);
 
   } catch {
     showAlert(alert, 'Network error. Please try again.');
@@ -144,7 +144,7 @@ async function handleLogout() {
   try {
     await fetch(`${API}/logout`, { method: 'POST', credentials: 'include' });
   } finally {
-    window.location.href = '/templates/login.html';
+    window.location.href = '/login';
   }
 }
 
@@ -153,14 +153,14 @@ async function handleLogout() {
 async function requireAuth(allowedRoles = []) {
   try {
     const res = await fetch(`${API}/me`, { credentials: 'include' });
-    if (!res.ok) { window.location.href = '/templates/login.html'; return null; }
+    if (!res.ok) { window.location.href = '/login'; return null; }
     const user = (await res.json());
     if (allowedRoles.length && !allowedRoles.includes(user.role)) {
-      window.location.href = '/templates/login.html'; return null;
+      window.location.href = '/login'; return null;
     }
     return user;
   } catch {
-    window.location.href = '/templates/login.html'; return null;
+    window.location.href = '/login'; return null;
   }
 }
 
