@@ -3,334 +3,451 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>Admin Panel — AlumNet</title>
   <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 64px;
+      bottom: 0;
+      width: 220px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .admin-sidebar-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.6rem 0.75rem 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.6rem 0.85rem;
+      border-radius: 9px;
+      font-size: 0.865rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      transition: all 0.2s ease;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .sidebar-link:hover {
+      background: var(--cyan-dim);
+      color: var(--text);
+    }
+
+    .sidebar-link.active {
+      background: var(--cyan-dim);
+      color: var(--cyan);
+    }
+
+    .sidebar-link .sidebar-badge {
+      margin-left: auto;
+      background: var(--amber-dim);
+      color: var(--amber);
+      border-radius: var(--radius-full);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+    }
+
+    .admin-main {
+      margin-left: 220px;
+      padding: 0;
+    }
+
+    /* Stats cards with animated counters */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+      animation: fade-up 0.4s ease;
+    }
+
+    .stat-trend {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.72rem;
+      margin-top: 0.4rem;
+    }
+
+    .stat-trend.up   { color: var(--emerald); }
+    .stat-trend.down { color: var(--rose); }
+
+    /* Action buttons in table */
+    .action-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+    /* User row status */
+    .user-status { display: flex; align-items: center; gap: 0.4rem; }
+
+    /* Activity feed */
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .activity-item:last-child { border-bottom: none; }
+
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .activity-time {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .activity-msg { font-size: 0.83rem; }
+
+    /* Section panels */
+    .admin-section { display: none; }
+    .admin-section.active { display: block; animation: fade-up 0.3s ease; }
+
+    @media (max-width: 900px) {
+      .admin-sidebar { display: none; }
+      .admin-main    { margin-left: 0; }
+      .stats-row     { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
 </head>
 <body class="page-wrapper">
 
-  <nav class="navbar">
-    <div class="container flex-between">
-      <a href="#" class="navbar-brand">Alum<span>Net</span> <span style="font-size:0.7rem; color:var(--warning); margin-left:0.4rem; font-family:'DM Sans',sans-serif; font-weight:600">ADMIN</span></a>
-      <ul class="navbar-nav">
-        <li><span style="font-size:0.85rem; color:var(--text-muted); padding:0 0.5rem">👤 <span id="user_name"></span></span></li>
-        <li><button class="btn btn-ghost btn-sm" data-action="logout">Sign out</button></li>
-      </ul>
-    </div>
-  </nav>
+<nav class="navbar" id="navbar">
+  <div class="container flex-between">
+    <a href="/" class="navbar-brand">
+      Alum<span>Net</span>
+      <span style="font-size: 0.7rem; color: var(--amber); margin-left: 0.4rem; font-family: 'Outfit',sans-serif; font-weight: 700; letter-spacing: 0.05em;">ADMIN</span>
+    </a>
+    <ul class="navbar-nav">
+      <li>
+        <span style="font-size: 0.83rem; color: var(--text-muted); padding: 0 0.5rem;">
+          🔑 <span id="user_name"></span>
+        </span>
+      </li>
+      <li>
+        <button class="btn btn-ghost btn-sm" data-action="logout">Sign out</button>
+      </li>
+    </ul>
+  </div>
+</nav>
 
-  <main class="main-content">
-    <div class="container">
+<!-- Sidebar -->
+<aside class="admin-sidebar">
+  <div class="sidebar-link active" onclick="showSection('overview')">
+    📊 Overview
+  </div>
+  <div class="sidebar-link" onclick="showSection('pending')" id="pending_link">
+    ⏳ Pending Verification
+    <span class="sidebar-badge" id="sidebar_pending_count" style="display:none;"></span>
+  </div>
 
-      <div class="page-header">
+  <div class="admin-sidebar-label">User Management</div>
+  <div class="sidebar-link" onclick="showSection('users')">👥 All Users</div>
+  <div class="sidebar-link" onclick="showSection('mentorships')">🤝 Mentorships</div>
+
+  <div class="admin-sidebar-label">System</div>
+  <div class="sidebar-link" onclick="showSection('audit')">📋 Audit Log</div>
+</aside>
+
+<div class="admin-main">
+<main class="main-content">
+  <div class="container">
+
+    <!-- =========================================================
+         OVERVIEW SECTION
+         ========================================================= -->
+    <div class="admin-section active" id="section_overview">
+      <div class="page-header" style="animation: fade-up 0.4s ease;">
         <h1>Admin Panel</h1>
-        <p>Manage verifications and users</p>
+        <p>Platform overview and quick actions</p>
       </div>
 
       <!-- Stats -->
-      <div class="stats-grid mb-3" id="stats_grid">
-        <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value accent" id="stat_total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value" id="stat_students">—</div></div>
-        <div class="stat-card"><div class="stat-label">Verified Alumni</div><div class="stat-value" id="stat_verified">—</div></div>
-        <div class="stat-card"><div class="stat-label">Pending Review</div><div class="stat-value" id="stat_pending">—</div></div>
-      </div>
-
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="pending_tab">Pending Verification</button>
-        <button class="tab-btn" data-tab="users_tab">All Users</button>
-      </div>
-
-      <!-- Tab: Pending alumni verification -->
-      <div class="tab-panel active" id="pending_tab">
-        <div id="pending_alert" class="alert hidden mb-2"></div>
-        <div class="table-wrap">
-          <table id="pending_table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Department</th>
-                <th>Grad Year</th>
-                <th>Roll No.</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="pending_body">
-              <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
-            </tbody>
-          </table>
+      <div class="stats-row" id="stats_row">
+        <div class="stat-card">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value accent" id="stat_total">—</div>
+          <div class="stat-trend up">↑ active platform</div>
         </div>
-        <div class="flex-between mt-2" id="pending_pagination"></div>
+        <div class="stat-card">
+          <div class="stat-label">Students</div>
+          <div class="stat-value" id="stat_students">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Verified Alumni</div>
+          <div class="stat-value success" id="stat_verified">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-value" style="color: var(--amber);" id="stat_pending">—</div>
+          <div class="stat-trend" id="stat_pending_trend"></div>
+        </div>
       </div>
 
-      <!-- Tab: All users -->
-      <div class="tab-panel" id="users_tab">
-        <div class="flex-between mb-2">
-          <div class="flex-center gap-sm">
-            <select class="form-control" id="users_role_filter" style="width:auto">
-              <option value="">All roles</option>
-              <option value="student">Student</option>
-              <option value="verified_alumni">Verified Alumni</option>
-              <option value="unverified_alumni">Unverified Alumni</option>
-              <option value="admin">Admin</option>
-            </select>
-            <button class="btn btn-ghost btn-sm" onclick="loadUsers(1)">Filter</button>
+      <!-- Recent activity -->
+      <div class="card">
+        <div class="card-title">
+          <div class="card-icon">📋</div>
+          Recent Activity
+        </div>
+        <div id="recent_activity">
+          <div style="text-align: center; padding: 2rem;">
+            <div class="spinner" style="margin: 0 auto;"></div>
           </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Joined</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="users_body">
-              <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="flex-between mt-2" id="users_pagination"></div>
       </div>
-
     </div>
-  </main>
 
-  <!-- Reject modal -->
-  <div class="modal-overlay" id="reject_modal_overlay">
-    <div class="modal" style="max-width:420px">
-      <div class="modal-header">
-        <h2 style="font-size:1.1rem">Reject Verification</h2>
-        <button class="modal-close" onclick="closeRejectModal()">✕</button>
+    <!-- =========================================================
+         PENDING VERIFICATION SECTION
+         ========================================================= -->
+    <div class="admin-section" id="section_pending">
+      <div class="page-header">
+        <h1>Pending Verification</h1>
+        <p>Review and approve alumni profiles</p>
       </div>
-      <p class="text-muted mb-2" style="font-size:0.88rem">Please provide a reason. This will be shown to the alumni.</p>
-      <div class="form-group">
-        <label class="form-label">Reason</label>
-        <textarea class="form-control" id="reject_reason" rows="3" maxlength="500" placeholder="e.g. Documents do not match registration details."></textarea>
+
+      <div id="pending_alert" class="alert hidden mb-2" role="alert"></div>
+
+      <div class="table-wrap">
+        <table id="pending_table">
+          <thead>
+            <tr>
+              <th>Alumni</th>
+              <th>Email</th>
+              <th>Department</th>
+              <th>Grad Year</th>
+              <th>Roll No.</th>
+              <th>Docs</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pending_body">
+            <tr>
+              <td colspan="7" class="text-center text-muted" style="padding: 3rem;">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div id="reject_alert" class="alert hidden mb-2"></div>
-      <div class="flex-center gap-sm">
-        <button class="btn btn-danger" id="reject_confirm_btn" onclick="confirmReject()">Confirm Rejection</button>
-        <button class="btn btn-ghost" onclick="closeRejectModal()">Cancel</button>
+      <div class="flex-between mt-2" id="pending_pagination"></div>
+    </div>
+
+    <!-- =========================================================
+         USERS SECTION
+         ========================================================= -->
+    <div class="admin-section" id="section_users">
+      <div class="page-header">
+        <h1>All Users</h1>
+        <p>Search and manage platform users</p>
       </div>
+
+      <div class="flex-between mb-2">
+        <div class="flex-center gap-sm flex-wrap">
+          <input class="form-control" id="user_search" placeholder="Search name or email…"
+                 style="width: 220px;" oninput="debounceSearch()" maxlength="120" />
+          <select class="form-control" id="users_role_filter" style="width: auto;" onchange="loadUsers(1)">
+            <option value="">All Roles</option>
+            <option value="student">Student</option>
+            <option value="verified_alumni">Verified Alumni</option>
+            <option value="unverified_alumni">Unverified Alumni</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div id="users_count" style="font-size: 0.83rem; color: var(--text-muted);"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Joined</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users_body">
+            <tr>
+              <td colspan="6" class="text-center text-muted" style="padding: 3rem;">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="flex-between mt-2" id="users_pagination"></div>
+    </div>
+
+    <!-- =========================================================
+         MENTORSHIPS SECTION
+         ========================================================= -->
+    <div class="admin-section" id="section_mentorships">
+      <div class="page-header">
+        <h1>Mentorship Activity</h1>
+        <p>Overview of all mentorship requests on the platform</p>
+      </div>
+      <div id="mentorship_list">
+        <div style="text-align: center; padding: 3rem 0;">
+          <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================
+         AUDIT LOG SECTION
+         ========================================================= -->
+    <div class="admin-section" id="section_audit">
+      <div class="page-header">
+        <h1>Security Audit Log</h1>
+        <p>Immutable record of all security events and admin actions</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Event</th>
+              <th>User</th>
+              <th>IP Address</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="audit_body">
+            <tr>
+              <td colspan="5" class="text-center text-muted" style="padding: 3rem;">
+                Audit log will display here once loaded.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- Rejection reason modal -->
+<div class="modal-overlay" id="reject_modal">
+  <div class="modal" style="max-width: 440px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Reject Application</h2>
+      <button class="modal-close" onclick="closeRejectModal()">✕</button>
+    </div>
+    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+      Provide a brief reason. This will be logged for the audit trail.
+    </p>
+    <div class="form-group">
+      <label class="form-label" for="rejection_reason">Rejection Reason</label>
+      <textarea class="form-control" id="rejection_reason" rows="3"
+                placeholder="e.g. Incomplete documents, graduation year mismatch…"
+                maxlength="500"></textarea>
+    </div>
+    <input type="hidden" id="reject_user_id" />
+    <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.75rem;">
+      <button class="btn btn-ghost" onclick="closeRejectModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmReject()">Confirm Reject</button>
     </div>
   </div>
+</div>
 
-  <script src="/static/js/auth.js"></script>
-  <script>
-    let adminUser   = null;
-    let rejectTarget = null;
+<div id="toast-container"></div>
 
-    /* ---- Init ---- */
-    document.addEventListener('DOMContentLoaded', async () => {
-      adminUser = await requireAuth(['admin']);
-      if (!adminUser) return;
-      document.getElementById('user_name').textContent = adminUser.full_name;
-      await loadStats();
-      await loadPending(1);
-      bindTabs();
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/admin.js"></script>
+<script>
+  // Navbar scroll
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+  });
 
-      document.getElementById('users_role_filter').addEventListener('change', () => loadUsers(1));
-    });
+  // Section navigation
+  let activeSection = 'overview';
 
-    /* ---- Stats ---- */
-    async function loadStats() {
-      try {
-        const res  = await fetch('/admin/stats', { credentials: 'include' });
-        const data = await res.json();
-        document.getElementById('stat_total').textContent    = data.total_users ?? '—';
-        document.getElementById('stat_students').textContent = data.total_students ?? '—';
-        document.getElementById('stat_verified').textContent = data.total_verified_alumni ?? '—';
-        document.getElementById('stat_pending').textContent  = data.total_unverified_alumni ?? '—';
-      } catch { /* non-critical */ }
+  function showSection(name) {
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+
+    const section = document.getElementById('section_' + name);
+    if (section) section.classList.add('active');
+
+    const link = document.querySelector(`.sidebar-link[onclick="showSection('${name}')"]`);
+    if (link) link.classList.add('active');
+
+    activeSection = name;
+
+    // Lazy-load section data
+    if (name === 'pending' && typeof loadPending === 'function') loadPending(1);
+    if (name === 'users'   && typeof loadUsers   === 'function') loadUsers(1);
+    if (name === 'audit'   && typeof loadAuditLog === 'function') loadAuditLog();
+  }
+
+  // Debounce search
+  let searchTimer;
+  function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (typeof loadUsers === 'function') loadUsers(1);
+    }, 350);
+  }
+
+  // Reject modal helpers
+  function openRejectModal(userId) {
+    document.getElementById('reject_user_id').value = userId;
+    document.getElementById('rejection_reason').value = '';
+    document.getElementById('reject_modal').classList.add('active');
+  }
+
+  function closeRejectModal() {
+    document.getElementById('reject_modal').classList.remove('active');
+  }
+
+  async function confirmReject() {
+    const userId = document.getElementById('reject_user_id').value;
+    const reason = document.getElementById('rejection_reason').value.trim();
+    if (!reason) {
+      document.getElementById('rejection_reason').focus();
+      return;
     }
-
-    /* ---- Pending verification ---- */
-    async function loadPending(page = 1) {
-      const tbody = document.getElementById('pending_body');
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem"><div class="spinner" style="margin:auto"></div></td></tr>';
-
-      try {
-        const res  = await fetch(`/admin/alumni/pending?page=${page}`, { credentials: 'include' });
-        const data = await res.json();
-        const list = data.alumni || [];
-
-        if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No pending verifications.</td></tr>';
-          document.getElementById('pending_pagination').innerHTML = '';
-          return;
-        }
-
-        tbody.innerHTML = list.map(a => `
-          <tr id="row_${a.id}">
-            <td><strong>${esc(a.full_name)}</strong></td>
-            <td class="text-muted">${esc(a.email)}</td>
-            <td>${esc(a.department)}</td>
-            <td>${a.graduation_year || '—'}</td>
-            <td class="text-muted">${esc(a.gik_roll_number) || '—'}</td>
-            <td>
-              <div class="flex-center gap-sm">
-                <button class="btn btn-success btn-sm" onclick="verifyAlumni(${a.id})">Verify</button>
-                <button class="btn btn-danger btn-sm"  onclick="openRejectModal(${a.id})">Reject</button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        renderPagination('pending_pagination', data.total, page, data.pages, 'loadPending');
-      } catch {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center" style="padding:2rem">Failed to load.</td></tr>';
-      }
+    if (typeof rejectAlumni === 'function') {
+      await rejectAlumni(userId, reason);
     }
-
-    async function verifyAlumni(alumniId) {
-      if (!confirm('Verify this alumni account?')) return;
-      try {
-        const res  = await fetch(`/admin/alumni/${alumniId}/verify`, { method: 'POST', credentials: 'include' });
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || 'Failed.'); return; }
-        document.getElementById(`row_${alumniId}`)?.remove();
-        await loadStats();
-      } catch { alert('Network error.'); }
-    }
-
-    function openRejectModal(alumniId) {
-      rejectTarget = alumniId;
-      document.getElementById('reject_reason').value = '';
-      document.getElementById('reject_alert').classList.add('hidden');
-      document.getElementById('reject_modal_overlay').classList.add('open');
-    }
-
-    function closeRejectModal() {
-      document.getElementById('reject_modal_overlay').classList.remove('open');
-      rejectTarget = null;
-    }
-
-    async function confirmReject() {
-      const reason = document.getElementById('reject_reason').value.trim();
-      const alert  = document.getElementById('reject_alert');
-      const btn    = document.getElementById('reject_confirm_btn');
-      if (!reason) { showAlertEl(alert, 'A reason is required.'); return; }
-
-      btn.disabled = true; btn.textContent = 'Rejecting…';
-
-      try {
-        const res  = await fetch(`/admin/alumni/${rejectTarget}/reject`, {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason }),
-        });
-        const data = await res.json();
-        if (!res.ok) { showAlertEl(alert, data.error || 'Failed.'); return; }
-        closeRejectModal();
-        document.getElementById(`row_${rejectTarget}`)?.remove();
-        await loadStats();
-      } catch { showAlertEl(alert, 'Network error.'); }
-      finally { btn.disabled = false; btn.textContent = 'Confirm Rejection'; }
-    }
-
-    /* ---- All users ---- */
-    async function loadUsers(page = 1) {
-      const tbody = document.getElementById('users_body');
-      const role  = document.getElementById('users_role_filter').value;
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem"><div class="spinner" style="margin:auto"></div></td></tr>';
-
-      const params = new URLSearchParams({ page, per_page: 25 });
-      if (role) params.set('role', role);
-
-      try {
-        const res  = await fetch(`/admin/users?${params}`, { credentials: 'include' });
-        const data = await res.json();
-        const list = data.users || [];
-
-        if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No users found.</td></tr>';
-          document.getElementById('users_pagination').innerHTML = '';
-          return;
-        }
-
-        tbody.innerHTML = list.map(u => `
-          <tr>
-            <td><strong>${esc(u.full_name)}</strong></td>
-            <td class="text-muted">${esc(u.email)}</td>
-            <td>${roleBadge(u.role)}</td>
-            <td>${u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
-            <td class="text-muted" style="font-size:0.82rem">${new Date(u.created_at).toLocaleDateString()}</td>
-            <td>
-              ${u.role !== 'admin' && u.is_active
-                ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id}, this)">Deactivate</button>`
-                : '<span class="text-muted" style="font-size:0.82rem">—</span>'}
-            </td>
-          </tr>
-        `).join('');
-
-        renderPagination('users_pagination', data.total, page, data.pages, 'loadUsers');
-      } catch {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center" style="padding:2rem">Failed to load.</td></tr>';
-      }
-    }
-
-    async function deactivateUser(userId, btn) {
-      if (!confirm('Deactivate this user account? They will no longer be able to log in.')) return;
-      btn.disabled = true;
-      try {
-        const res  = await fetch(`/admin/users/${userId}/deactivate`, { method: 'POST', credentials: 'include' });
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || 'Failed.'); btn.disabled = false; return; }
-        btn.closest('tr').querySelector('td:nth-child(4)').innerHTML = '<span class="badge badge-danger">Inactive</span>';
-        btn.remove();
-        await loadStats();
-      } catch { alert('Network error.'); btn.disabled = false; }
-    }
-
-    /* ---- Tabs ---- */
-    function bindTabs() {
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-          btn.classList.add('active');
-          const panel = document.getElementById(btn.dataset.tab);
-          if (panel) panel.classList.add('active');
-          if (btn.dataset.tab === 'users_tab') loadUsers(1);
-        });
-      });
-    }
-
-    /* ---- Helpers ---- */
-    function esc(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    function roleBadge(role) {
-      const map = {
-        student: 'info', verified_alumni: 'success',
-        unverified_alumni: 'warning', admin: 'danger'
-      };
-      const label = { student:'Student', verified_alumni:'Verified Alumni', unverified_alumni:'Unverified Alumni', admin:'Admin' };
-      return `<span class="badge badge-${map[role]||'muted'}">${label[role]||role}</span>`;
-    }
-
-    function renderPagination(containerId, total, page, pages, fnName) {
-      const el = document.getElementById(containerId);
-      if (!el || pages <= 1) { if (el) el.innerHTML = ''; return; }
-      el.innerHTML = `
-        <button class="btn btn-ghost btn-sm" onclick="${fnName}(${page-1})" ${page<=1?'disabled':''}>← Prev</button>
-        <span class="text-muted" style="font-size:0.85rem">Page ${page} of ${pages} · ${total} records</span>
-        <button class="btn btn-ghost btn-sm" onclick="${fnName}(${page+1})" ${page>=pages?'disabled':''}>Next →</button>
-      `;
-    }
-
-    function showAlertEl(el, msg, type = 'danger') {
-      el.className = `alert alert-${type}`;
-      el.textContent = msg;
-      el.classList.remove('hidden');
-    }
-  </script>
+    closeRejectModal();
+  }
+</script>
 </body>
 </html>
