@@ -107,3 +107,5 @@ def role_has_permission(role: str, permission: str) -> bool:
 def get_permissions_for_role(role: str) -> set:
     """Return the full set of permissions for a role (read-only copy)."""
     return frozenset(_ROLE_PERMISSIONS.get(role, set()))
+
+
