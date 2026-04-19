@@ -11,7 +11,7 @@ Security notes:
 """
 
 from datetime import datetime, timezone
-from app import db
+from extensions import db  # ✅ FIXED: was "from app import db"
 
 
 class Admin(db.Model):
