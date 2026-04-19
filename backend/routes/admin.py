@@ -1,15 +1,10 @@
 """
 routes/admin.py
 ---------------
-Administrator endpoints: alumni verification, user management,
-audit log access.
+Administrator endpoints: user approval/rejection, alumni verification,
+user management, and dashboard stats.
 
-Security controls:
-    RBAC-05  — Every route is admin-only
-    RBAC-06  — Role validated server-side via admin_required decorator
-    DATA-01  — PII only visible to admins where needed
-    APP-05   — Generic error messages
-    APP-06   — All admin actions logged with admin user_id
+All routes require admin role (RBAC-05).
 """
 
 from datetime import datetime, timezone
@@ -17,8 +12,9 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import current_user
 
-from app import db
+from extensions import db          # ✅ FIXED: was "from app import db"
 from models.alumni import Alumni
+from models.student import Student
 from models.user import User
 from models.admin import Admin
 from auth.decorators import admin_required
@@ -27,101 +23,150 @@ from rbac.roles import Role
 admin_bp = Blueprint("admin", __name__)
 
 
-# ------------------------------------------------------------------ #
-# GET /admin/alumni/pending  — list alumni awaiting verification
-# ------------------------------------------------------------------ #
+# ── GET /admin/stats ─────────────────────────────────────────────────────────
 
-@admin_bp.route("/alumni/pending", methods=["GET"])
+@admin_bp.route("/stats", methods=["GET"])
 @admin_required
-def list_pending_alumni():
-    """
-    Return all alumni with unverified_alumni role pending review (RBAC-05).
-    Full admin dict exposes PII — accessible to admins only.
-    """
-    page     = request.args.get("page", 1, type=int)
-    per_page = min(request.args.get("per_page", 20, type=int), 50)
-
-    paginated = (
-        Alumni.query
-        .join(User, Alumni.user_id == User.id)
-        .filter(User.role == Role.UNVERIFIED_ALUMNI)
-        .paginate(page=page, per_page=per_page, error_out=False)
-    )
-
+def stats():
+    """Dashboard summary counts."""
     return jsonify({
-        "alumni":   [a.to_admin_dict() for a in paginated.items],
-        "total":    paginated.total,
-        "page":     paginated.page,
-        "pages":    paginated.pages,
+        "total_users":             User.query.count(),
+        "pending_approval":        User.query.filter_by(account_status="pending").count(),
+        "total_students":          User.query.filter_by(role=Role.STUDENT).count(),
+        "total_verified_alumni":   User.query.filter_by(role=Role.VERIFIED_ALUMNI).count(),
+        "total_unverified_alumni": User.query.filter_by(role=Role.UNVERIFIED_ALUMNI).count(),
     }), 200
 
 
-# ------------------------------------------------------------------ #
-# POST /admin/alumni/<alumni_id>/verify  — approve verification
-# ------------------------------------------------------------------ #
+# ── GET /admin/pending ────────────────────────────────────────────────────────
+# List ALL pending registrations (students + alumni)
 
-@admin_bp.route("/alumni/<int:alumni_id>/verify", methods=["POST"])
+@admin_bp.route("/pending", methods=["GET"])
 @admin_required
-def verify_alumni(alumni_id):
+def list_pending_users():
     """
-    Approve an alumni's verification.
-    Elevates User.role from unverified_alumni → verified_alumni (RBAC-05).
+    Return all users with account_status='pending' (students and alumni).
+    Admin reviews and approves/rejects each one.
     """
-    alumni = Alumni.query.get(alumni_id)
-    if not alumni:
-        return jsonify({"error": "Alumni not found."}), 404
+    page     = request.args.get("page", 1, type=int)
+    per_page = min(request.args.get("per_page", 20, type=int), 50)
+    role_filter = request.args.get("role", "").strip()
 
-    user = User.query.get(alumni.user_id)
+    query = User.query.filter_by(account_status="pending")
+    if role_filter in (Role.STUDENT, Role.UNVERIFIED_ALUMNI, Role.VERIFIED_ALUMNI):
+        query = query.filter_by(role=role_filter)
+
+    paginated = query.order_by(User.created_at.asc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    users_data = []
+    for u in paginated.items:
+        entry = {
+            "id":         u.id,
+            "username":   u.username,
+            "email":      u.email,
+            "full_name":  u.full_name,
+            "role":       u.role,
+            "created_at": u.created_at.isoformat(),
+        }
+        # Attach profile details
+        if u.role == Role.STUDENT and u.student_profile:
+            p = u.student_profile
+            entry["department"]      = p.department
+            entry["degree_program"]  = p.degree_program
+            entry["graduation_year"] = p.graduation_year
+        elif u.role in (Role.UNVERIFIED_ALUMNI, Role.VERIFIED_ALUMNI) and u.alumni_profile:
+            p = u.alumni_profile
+            entry["department"]      = p.department
+            entry["graduation_year"] = p.graduation_year
+            entry["gik_roll_number"] = p.gik_roll_number
+        users_data.append(entry)
+
+    return jsonify({
+        "users":  users_data,
+        "total":  paginated.total,
+        "page":   paginated.page,
+        "pages":  paginated.pages,
+    }), 200
+
+
+# ── POST /admin/users/<user_id>/approve ──────────────────────────────────────
+
+@admin_bp.route("/users/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def approve_user(user_id):
+    """
+    Approve a pending user account (student or alumni).
+    - Students: account_status → approved, they can now log in.
+    - Alumni: account_status → approved AND is_verified → True, role → verified_alumni.
+    """
+    user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found."}), 404
 
-    if user.role == Role.VERIFIED_ALUMNI:
-        return jsonify({"message": "Alumni is already verified."}), 200
+    if user.account_status == "approved":
+        return jsonify({"message": "User is already approved."}), 200
 
-    # Perform verification
-    alumni.is_verified   = True
-    alumni.verified_at   = datetime.now(timezone.utc)
-    alumni.verified_by   = current_user.id
-    alumni.rejection_reason = None
-    user.role            = Role.VERIFIED_ALUMNI
+    user.account_status  = "approved"
+    user.rejection_reason = None
 
-    # Update admin action counters (APP-06)
+    # For alumni, also flip verification
+    if user.role in (Role.UNVERIFIED_ALUMNI, Role.VERIFIED_ALUMNI):
+        user.role = Role.VERIFIED_ALUMNI
+        if user.alumni_profile:
+            user.alumni_profile.is_verified = True
+            user.alumni_profile.verified_at = datetime.now(timezone.utc)
+            user.alumni_profile.verified_by = current_user.id
+            user.alumni_profile.rejection_reason = None
+
+    # Update admin counters
     admin_profile = Admin.query.filter_by(user_id=current_user.id).first()
     if admin_profile:
-        admin_profile.alumni_verified_count += 1
+        if user.role == Role.VERIFIED_ALUMNI:
+            admin_profile.alumni_verified_count += 1
         admin_profile.record_action()
 
     db.session.commit()
 
     current_app.logger.info(
-        "ADMIN_VERIFY_ALUMNI admin_id=%s alumni_id=%s", current_user.id, alumni_id
+        "ADMIN_APPROVE_USER admin_id=%s target_user_id=%s role=%s",
+        current_user.id, user_id, user.role,
     )
-    return jsonify({"message": "Alumni verified successfully.", "alumni_id": alumni_id}), 200
+    return jsonify({
+        "message": f"User '{user.username}' approved successfully.",
+        "user_id": user_id,
+        "role":    user.role,
+    }), 200
 
 
-# ------------------------------------------------------------------ #
-# POST /admin/alumni/<alumni_id>/reject  — reject verification
-# ------------------------------------------------------------------ #
+# ── POST /admin/users/<user_id>/reject ───────────────────────────────────────
 
-@admin_bp.route("/alumni/<int:alumni_id>/reject", methods=["POST"])
+@admin_bp.route("/users/<int:user_id>/reject", methods=["POST"])
 @admin_required
-def reject_alumni(alumni_id):
+def reject_user(user_id):
     """
-    Reject an alumni's verification request with a reason (RBAC-05).
-    User remains as unverified_alumni.
+    Reject a pending user account with a reason.
+    The user will see the reason when attempting to log in.
     """
     data = request.get_json(silent=True) or {}
     reason = str(data.get("reason", "")).strip()[:500]
-
     if not reason:
         return jsonify({"error": "A rejection reason is required."}), 400
 
-    alumni = Alumni.query.get(alumni_id)
-    if not alumni:
-        return jsonify({"error": "Alumni not found."}), 404
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found."}), 404
 
-    alumni.is_verified      = False
-    alumni.rejection_reason = reason
+    if user.role == Role.ADMIN:
+        return jsonify({"error": "Admin accounts cannot be rejected."}), 403
+
+    user.account_status   = "rejected"
+    user.rejection_reason = reason
+
+    if user.alumni_profile:
+        user.alumni_profile.is_verified      = False
+        user.alumni_profile.rejection_reason = reason
 
     admin_profile = Admin.query.filter_by(user_id=current_user.id).first()
     if admin_profile:
@@ -131,27 +176,31 @@ def reject_alumni(alumni_id):
     db.session.commit()
 
     current_app.logger.info(
-        "ADMIN_REJECT_ALUMNI admin_id=%s alumni_id=%s reason=%s",
-        current_user.id, alumni_id, reason,
+        "ADMIN_REJECT_USER admin_id=%s target_user_id=%s reason=%s",
+        current_user.id, user_id, reason,
     )
-    return jsonify({"message": "Alumni verification rejected.", "alumni_id": alumni_id}), 200
+    return jsonify({
+        "message": f"User '{user.username}' rejected.",
+        "user_id": user_id,
+    }), 200
 
 
-# ------------------------------------------------------------------ #
-# GET /admin/users  — list all users
-# ------------------------------------------------------------------ #
+# ── GET /admin/users ─────────────────────────────────────────────────────────
 
 @admin_bp.route("/users", methods=["GET"])
 @admin_required
 def list_users():
-    """Return paginated list of all users (RBAC-05)."""
-    page     = request.args.get("page", 1, type=int)
-    per_page = min(request.args.get("per_page", 50, type=int), 100)
+    """Return paginated list of all users."""
+    page        = request.args.get("page", 1, type=int)
+    per_page    = min(request.args.get("per_page", 50, type=int), 100)
     role_filter = request.args.get("role", "").strip()
+    status_filter = request.args.get("status", "").strip()
 
     query = User.query
     if role_filter and role_filter in Role.ALL:
         query = query.filter_by(role=role_filter)
+    if status_filter in ("pending", "approved", "rejected"):
+        query = query.filter_by(account_status=status_filter)
 
     paginated = query.order_by(User.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
@@ -159,37 +208,33 @@ def list_users():
 
     users = [
         {
-            "id":         u.id,
-            "username":   u.username,
-            "email":      u.email,
-            "full_name":  u.full_name,
-            "role":       u.role,
-            "is_active":  u.is_active,
-            "created_at": u.created_at.isoformat(),
-            "last_login": u.last_login.isoformat() if u.last_login else None,
+            "id":             u.id,
+            "username":       u.username,
+            "email":          u.email,
+            "full_name":      u.full_name,
+            "role":           u.role,
+            "account_status": u.account_status,
+            "is_active":      u.is_active,
+            "created_at":     u.created_at.isoformat(),
+            "last_login":     u.last_login.isoformat() if u.last_login else None,
         }
         for u in paginated.items
     ]
 
     return jsonify({
-        "users": users,
-        "total": paginated.total,
-        "page":  paginated.page,
-        "pages": paginated.pages,
+        "users":  users,
+        "total":  paginated.total,
+        "page":   paginated.page,
+        "pages":  paginated.pages,
     }), 200
 
 
-# ------------------------------------------------------------------ #
-# POST /admin/users/<user_id>/deactivate  — deactivate a user account
-# ------------------------------------------------------------------ #
+# ── POST /admin/users/<user_id>/deactivate ────────────────────────────────────
 
 @admin_bp.route("/users/<int:user_id>/deactivate", methods=["POST"])
 @admin_required
 def deactivate_user(user_id):
-    """
-    Deactivate a user account (soft delete).
-    Admins cannot deactivate themselves or other admins (RBAC-05).
-    """
+    """Deactivate (soft-delete) a user account."""
     if user_id == current_user.id:
         return jsonify({"error": "You cannot deactivate your own account."}), 403
 
@@ -218,22 +263,21 @@ def deactivate_user(user_id):
     return jsonify({"message": "User deactivated.", "user_id": user_id}), 200
 
 
-# ------------------------------------------------------------------ #
-# GET /admin/stats  — dashboard summary counts
-# ------------------------------------------------------------------ #
+# ── Legacy alumni-specific endpoints (kept for backwards compatibility) ────────
 
-@admin_bp.route("/stats", methods=["GET"])
+@admin_bp.route("/alumni/pending", methods=["GET"])
 @admin_required
-def stats():
-    """Return high-level user/verification stats for the admin dashboard."""
-    total_users         = User.query.count()
-    total_students      = User.query.filter_by(role=Role.STUDENT).count()
-    total_verified      = User.query.filter_by(role=Role.VERIFIED_ALUMNI).count()
-    total_unverified    = User.query.filter_by(role=Role.UNVERIFIED_ALUMNI).count()
-
+def list_pending_alumni():
+    """List alumni specifically pending verification."""
+    paginated = (
+        Alumni.query
+        .join(User, Alumni.user_id == User.id)
+        .filter(User.account_status == "pending")
+        .paginate(page=request.args.get("page", 1, type=int), per_page=20, error_out=False)
+    )
     return jsonify({
-        "total_users":             total_users,
-        "total_students":          total_students,
-        "total_verified_alumni":   total_verified,
-        "total_unverified_alumni": total_unverified,
+        "alumni": [a.to_admin_dict() for a in paginated.items],
+        "total":  paginated.total,
+        "page":   paginated.page,
+        "pages":  paginated.pages,
     }), 200
