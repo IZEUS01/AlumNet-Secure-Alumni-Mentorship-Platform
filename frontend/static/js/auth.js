@@ -1,270 +1,376 @@
 /**
- * auth.js — AlumNet
- * Auth routes are CSRF-exempt (JSON API + SameSite=Strict cookie).
+ * admin.js — AlumNet Admin Dashboard
+ * IDs match admin_panel.html exactly.
  */
 
-const API = '/auth';
+const ADMIN = '/admin';
 
-/* ── POST helper ── */
-async function postJSON(url, body) {
-  const res = await fetch(url, {
-    method:      'POST',
-    credentials: 'include',
-    headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify(body),
-  });
-  // Always parse as text first — avoids JSON parse crash on unexpected HTML responses
+/* ── helpers ─────────────────────────────────────────────────────── */
+
+async function apiFetch(url, opts = {}) {
+  const res  = await fetch(url, { credentials: 'include', ...opts });
   const text = await res.text();
   let data = {};
-  try { data = JSON.parse(text); } catch { data = { error: text || 'Unexpected server response.' }; }
-  return { res, data };
+  try { data = JSON.parse(text); } catch { data = { error: text }; }
+  return { ok: res.ok, status: res.status, data };
 }
 
-/* ── UI helpers ── */
-function showAlert(el, msg, type = 'danger') {
-  if (!el) return;
-  el.className = `alert alert-${type}`;
-  el.innerHTML = msg;
-  el.classList.remove('hidden');
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-function hideAlert(el) { if (el) el.classList.add('hidden'); }
-
-function setLoading(btn, on, text = 'Please wait…') {
-  if (!btn) return;
-  btn.disabled = on;
-  if (!btn.dataset.orig) btn.dataset.orig = btn.innerHTML;
-  btn.innerHTML = on ? `<span class="btn-spinner"></span>${text}` : btn.dataset.orig;
-}
-
-function fieldError(id, msg) {
-  const err = document.getElementById(id + '_error');
-  const inp = document.getElementById(id);
-  if (err) { err.textContent = msg || ''; err.classList.toggle('visible', !!msg); }
-  if (inp)  inp.classList.toggle('input-error', !!msg);
-}
-
-function clearErrors() {
-  document.querySelectorAll('.form-error').forEach(e => { e.textContent = ''; e.classList.remove('visible'); });
-  document.querySelectorAll('.input-error').forEach(e => e.classList.remove('input-error'));
+async function apiPost(url, body = {}) {
+  return apiFetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
 }
 
 function showToast(msg, type = 'success') {
-  const c = document.getElementById('toast-container');
-  if (!c) return;
-  const t = document.createElement('div');
-  t.className = `toast toast-${type}`;
-  t.innerHTML = `<span class="toast-icon">${type === 'success' ? '✓' : '✕'}</span>${msg}`;
-  c.appendChild(t);
-  requestAnimationFrame(() => t.classList.add('visible'));
-  setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 400); }, 4000);
-}
-
-/* ── Password strength ── */
-function pwStrength(pw) {
-  const checks = [
-    { ok: pw.length >= 8,          hint: 'At least 8 characters.' },
-    { ok: /[A-Z]/.test(pw),        hint: 'One uppercase letter.' },
-    { ok: /[0-9]/.test(pw),        hint: 'One digit.' },
-    { ok: /[^A-Za-z0-9]/.test(pw), hint: 'One special character.' },
-  ];
-  return { score: checks.filter(c => c.ok).length, missing: checks.filter(c => !c.ok).map(c => c.hint) };
-}
-
-function renderStrength(pw) {
-  const wrap = document.getElementById('pw_strength_wrap');
-  const bar  = document.getElementById('pw_strength_bar');
-  const lbl  = document.getElementById('pw_strength_label');
-  if (!wrap) return;
-  wrap.style.display = pw ? 'flex' : 'none';
-  if (!pw) return;
-  const { score } = pwStrength(pw);
-  const cfg = [
-    null,
-    { w:'25%',  c:'#fb7185', t:'Weak'   },
-    { w:'50%',  c:'#fbbf24', t:'Fair'   },
-    { w:'75%',  c:'#34d399', t:'Good'   },
-    { w:'100%', c:'#4fc4f7', t:'Strong' },
-  ][score] || { w:'0%', c:'', t:'' };
-  if (bar) { bar.style.width = cfg.w; bar.style.background = cfg.c; }
-  if (lbl) { lbl.textContent = cfg.t; lbl.style.color = cfg.c; }
-}
-
-/* ================================================================
-   LOGIN
-   ================================================================ */
-async function handleLogin(e) {
-  e.preventDefault();
-  clearErrors();
-
-  const alertEl = document.getElementById('login_alert');
-  const btn     = document.getElementById('login_btn');
-  const email   = document.getElementById('email').value.trim();
-  const pass    = document.getElementById('password').value;
-
-  if (!email) { fieldError('email',    'Email is required.');    return; }
-  if (!pass)  { fieldError('password', 'Password is required.'); return; }
-
-  setLoading(btn, true, 'Signing in…');
-  hideAlert(alertEl);
-
-  let res, data;
-  try {
-    ({ res, data } = await postJSON(`${API}/login`, { email, password: pass }));
-  } catch (err) {
-    showAlert(alertEl, `Server error: ${err.message}. Is Flask running?`);
-    setLoading(btn, false);
-    return;
+  let box = document.getElementById('toast-container');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'toast-container';
+    box.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;';
+    document.body.appendChild(box);
   }
-
-  setLoading(btn, false);
-
-  if (!res.ok) {
-    showAlert(alertEl, data.error || 'Login failed. Please try again.');
-    return;
-  }
-
-  showToast('Welcome back, ' + (data.user?.full_name || 'there') + '!');
-  const role = data.user?.role || '';
-  setTimeout(() => {
-    if      (role === 'admin')        window.location.href = '/admin/dashboard';
-    else if (role === 'student')      window.location.href = '/student/dashboard';
-    else if (role.includes('alumni')) window.location.href = '/alumni/dashboard';
-    else                              window.location.href = '/student/dashboard';
-  }, 600);
+  const bg   = type === 'success' ? 'rgba(52,211,153,.15)' : 'rgba(251,113,133,.15)';
+  const bdr  = type === 'success' ? 'rgba(52,211,153,.35)' : 'rgba(251,113,133,.35)';
+  const t    = document.createElement('div');
+  t.style.cssText = `padding:.75rem 1.1rem;border-radius:8px;font-size:.85rem;font-weight:500;
+    color:#e2e8f4;background:${bg};border:1px solid ${bdr};
+    box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:320px;pointer-events:auto;
+    transform:translateX(120%);transition:transform .3s cubic-bezier(.16,1,.3,1);`;
+  t.textContent = msg;
+  box.appendChild(t);
+  requestAnimationFrame(() => t.style.transform = 'translateX(0)');
+  setTimeout(() => { t.style.transform = 'translateX(120%)'; setTimeout(() => t.remove(), 350); }, 4500);
 }
 
-/* ================================================================
-   REGISTER
-   ================================================================ */
-async function handleRegister(e) {
-  e.preventDefault();
-  clearErrors();
-
-  const alertEl   = document.getElementById('register_alert');
-  const btn       = document.getElementById('register_btn');
-  const email     = document.getElementById('email').value.trim();
-  const username  = document.getElementById('username').value.trim();
-  const full_name = document.getElementById('full_name').value.trim();
-  const password  = document.getElementById('password').value;
-  const role      = (document.querySelector('input[name="role"]:checked') || {}).value || 'student';
-
-  let hasError = false;
-  if (!full_name) { fieldError('full_name', 'Full name is required.');  hasError = true; }
-  if (!username)  { fieldError('username',  'Username is required.');   hasError = true; }
-  if (!email)     { fieldError('email',     'Email is required.');      hasError = true; }
-  if (!password)  { fieldError('password',  'Password is required.');   hasError = true; }
-  if (hasError) return;
-
-  const { score, missing } = pwStrength(password);
-  if (score < 3) { fieldError('password', missing.join(' ')); return; }
-
-  setLoading(btn, true, 'Creating account…');
-  hideAlert(alertEl);
-
-  // department + graduation_year sent for ALL roles (always visible fields)
-  const body = {
-    email, username, full_name, password, role,
-    department:      document.getElementById('department')?.value.trim()              || '',
-    graduation_year: parseInt(document.getElementById('graduation_year')?.value) || null,
+function roleBadge(role) {
+  const map = {
+    student:           ['Student',         '#4fc4f7'],
+    unverified_alumni: ['Alumni (Pending)', '#fbbf24'],
+    verified_alumni:   ['Alumni ✓',        '#34d399'],
+    admin:             ['Admin',           '#a78bfa'],
   };
-  // Alumni-only extras
-  if (role === 'alumni') {
-    body.degree_program  = document.getElementById('degree_program')?.value.trim()   || '';
-    body.gik_roll_number = document.getElementById('roll_number')?.value.trim()      || '';
-  }
+  const [label, color] = map[role] || [role, '#94a3b8'];
+  return `<span style="background:${color}22;color:${color};padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700;border:1px solid ${color}44;white-space:nowrap;">${label}</span>`;
+}
 
-  let res, data;
-  try {
-    ({ res, data } = await postJSON(`${API}/register`, body));
-  } catch (err) {
-    showAlert(alertEl, `Server error: ${err.message}. Is Flask running?`);
-    setLoading(btn, false);
+function statusBadge(status) {
+  const map = {
+    pending:  ['Pending',  '#fbbf24'],
+    approved: ['Approved', '#34d399'],
+    rejected: ['Rejected', '#fb7185'],
+  };
+  const [label, color] = map[status] || [status, '#94a3b8'];
+  return `<span style="background:${color}22;color:${color};padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700;border:1px solid ${color}44;">${label}</span>`;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—';
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+/* ── Stats ───────────────────────────────────────────────────────── */
+
+async function loadStats() {
+  const { ok, data } = await apiFetch(`${ADMIN}/stats`);
+  if (!ok) return;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? 0; };
+  set('stat_total',    data.total_users);
+  set('stat_students', data.total_students);
+  set('stat_verified', data.total_verified_alumni);
+  set('stat_pending',  data.pending_approval);
+
+  // Also update sidebar pending badge
+  const badge = document.getElementById('sidebar_pending_count');
+  if (badge) {
+    badge.textContent = data.pending_approval;
+    badge.style.display = data.pending_approval > 0 ? 'inline-flex' : 'none';
+  }
+}
+
+/* ── Recent Activity ─────────────────────────────────────────────── */
+
+async function loadRecentActivity() {
+  const container = document.getElementById('recent_activity');
+  if (!container) return;
+
+  const { ok, data } = await apiFetch(`${ADMIN}/users?per_page=8`);
+  if (!ok) {
+    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem;">Could not load activity.</p>`;
     return;
   }
 
-  setLoading(btn, false);
-
-  if (!res.ok) {
-    if (data.errors) {
-      Object.entries(data.errors).forEach(([f, m]) => fieldError(f, Array.isArray(m) ? m.join(' ') : m));
-    } else {
-      showAlert(alertEl, data.error || 'Registration failed. Please try again.');
-    }
+  const users = data.users || [];
+  if (users.length === 0) {
+    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem;">No users yet.</p>`;
     return;
   }
 
-  // ✅ Success — go to login
-  showAlert(alertEl, '✅ Account created! Redirecting to login…', 'success');
-  setTimeout(() => { window.location.href = '/login?registered=1'; }, 1800);
+  container.innerHTML = users.map(u => `
+    <div style="display:flex;align-items:center;gap:.9rem;padding:.7rem 0;border-bottom:1px solid rgba(255,255,255,.05);">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--bg-input);
+           display:flex;align-items:center;justify-content:center;
+           font-size:.85rem;font-weight:700;color:var(--cyan);flex-shrink:0;">
+        ${(u.full_name?.[0] || '?').toUpperCase()}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:.875rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.full_name}</div>
+        <div style="font-size:.74rem;color:var(--text-muted);">${u.email}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0;">
+        ${roleBadge(u.role)} ${statusBadge(u.account_status)}
+        <span style="font-size:.7rem;color:var(--text-muted);min-width:60px;text-align:right;">${timeAgo(u.created_at)}</span>
+      </div>
+    </div>
+  `).join('');
 }
 
-/* ================================================================
-   LOGOUT
-   ================================================================ */
-async function handleLogout() {
-  try { await postJSON(`${API}/logout`, {}); } finally {
-    window.location.href = '/login';
+/* ── Pending approvals ───────────────────────────────────────────── */
+
+let pendingPage = 1;
+
+async function loadPending(page = 1) {
+  pendingPage = page;
+  const tbody = document.getElementById('pending_body');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2.5rem;"><div class="spinner" style="margin:0 auto;"></div></td></tr>`;
+
+  const { ok, data } = await apiFetch(`${ADMIN}/pending?page=${page}&per_page=20`);
+  if (!ok) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load pending users.</td></tr>`;
+    return;
+  }
+
+  if (!data.users || data.users.length === 0) {
+    tbody.innerHTML = `
+      <tr><td colspan="7" style="text-align:center;padding:3rem;">
+        <div style="font-size:2rem;margin-bottom:.5rem;">✅</div>
+        <div style="font-weight:600;color:var(--text);">All caught up!</div>
+        <div style="font-size:.85rem;color:var(--text-muted);">No pending registrations.</div>
+      </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.users.map(u => `
+    <tr id="pending_row_${u.id}">
+      <td style="padding:.75rem;">
+        <div style="font-weight:600;color:var(--text);">${u.full_name}</div>
+        <div style="font-size:.74rem;color:var(--text-muted);">@${u.username} · ${timeAgo(u.created_at)}</div>
+        <div style="margin-top:.3rem;">${roleBadge(u.role)}</div>
+      </td>
+      <td style="padding:.75rem;font-size:.83rem;color:var(--text-muted);">${u.email}</td>
+      <td style="padding:.75rem;font-size:.83rem;">${u.department || '—'}</td>
+      <td style="padding:.75rem;font-size:.83rem;">${u.graduation_year || '—'}</td>
+      <td style="padding:.75rem;font-size:.83rem;">${u.gik_roll_number || '—'}</td>
+      <td style="padding:.75rem;font-size:.75rem;color:var(--text-muted);">—</td>
+      <td style="padding:.75rem;">
+        <div style="display:flex;gap:.4rem;">
+          <button onclick="approveUser(${u.id}, this)"
+            style="padding:.4rem .9rem;background:rgba(52,211,153,.12);color:#34d399;
+                   border:1px solid rgba(52,211,153,.3);border-radius:7px;
+                   font-size:.78rem;font-weight:700;cursor:pointer;">
+            ✓ Approve
+          </button>
+          <button onclick="openRejectModal(${u.id})"
+            style="padding:.4rem .9rem;background:rgba(251,113,133,.1);color:#fb7185;
+                   border:1px solid rgba(251,113,133,.25);border-radius:7px;
+                   font-size:.78rem;font-weight:700;cursor:pointer;">
+            ✕ Reject
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  // Pagination
+  const pag = document.getElementById('pending_pagination');
+  if (pag && data.pages > 1) {
+    pag.innerHTML = Array.from({ length: data.pages }, (_, i) => i + 1).map(p => `
+      <button onclick="loadPending(${p})"
+        style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);
+               background:${p===page?'var(--cyan)':'var(--bg-input)'};
+               color:${p===page?'#080c14':'var(--text)'};
+               font-size:.78rem;font-weight:600;cursor:pointer;margin:0 2px;">${p}</button>
+    `).join('');
+  } else if (pag) { pag.innerHTML = ''; }
+}
+
+/* ── Approve ─────────────────────────────────────────────────────── */
+
+async function approveUser(userId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/approve`);
+  if (ok) {
+    showToast(data.message || 'User approved ✓', 'success');
+    const row = document.getElementById(`pending_row_${userId}`);
+    if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>row.remove(),300); }
+    loadStats();
+  } else {
+    showToast(data.error || 'Approval failed.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Approve'; }
   }
 }
 
-/* ================================================================
-   SESSION GUARD (used by dashboard pages)
-   ================================================================ */
-async function requireAuth(allowedRoles = []) {
+/* ── Reject ──────────────────────────────────────────────────────── */
+
+async function rejectAlumni(userId, reason) {
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/reject`, { reason });
+  if (ok) {
+    showToast(data.message || 'User rejected.', 'error');
+    const row = document.getElementById(`pending_row_${userId}`);
+    if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>row.remove(),300); }
+    loadStats();
+  } else {
+    showToast(data.error || 'Rejection failed.', 'error');
+  }
+}
+
+/* ── All Users table ─────────────────────────────────────────────── */
+
+let usersPage = 1;
+let searchTimer;
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadUsers(1), 350);
+}
+
+async function loadUsers(page = 1) {
+  usersPage = page;
+  const tbody = document.getElementById('users_body');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2.5rem;"><div class="spinner" style="margin:0 auto;"></div></td></tr>`;
+
+  const search = (document.getElementById('user_search')?.value || '').trim();
+  const role   = document.getElementById('users_role_filter')?.value || '';
+  let url = `${ADMIN}/users?page=${page}&per_page=20`;
+  if (role) url += `&role=${encodeURIComponent(role)}`;
+
+  const { ok, data } = await apiFetch(url);
+  if (!ok) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load users.</td></tr>`;
+    return;
+  }
+
+  let users = data.users || [];
+  if (search) {
+    const q = search.toLowerCase();
+    users = users.filter(u => (u.full_name+u.email+u.username).toLowerCase().includes(q));
+  }
+
+  const countEl = document.getElementById('users_count');
+  if (countEl) countEl.textContent = `${data.total} user${data.total !== 1 ? 's' : ''} total`;
+
+  if (users.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => `
+    <tr id="user_row_${u.id}">
+      <td style="padding:.7rem;">
+        <div style="font-weight:600;color:var(--text);">${u.full_name}</div>
+        <div style="font-size:.74rem;color:var(--text-muted);">@${u.username}</div>
+      </td>
+      <td style="padding:.7rem;font-size:.83rem;color:var(--text-muted);">${u.email}</td>
+      <td style="padding:.7rem;">${roleBadge(u.role)}</td>
+      <td style="padding:.7rem;font-size:.78rem;color:var(--text-muted);">${timeAgo(u.created_at)}</td>
+      <td style="padding:.7rem;">${statusBadge(u.account_status)}</td>
+      <td style="padding:.7rem;">
+        ${u.account_status === 'pending' ? `
+          <button onclick="approveUser(${u.id}, this)"
+            style="padding:.35rem .75rem;background:rgba(52,211,153,.12);color:#34d399;
+                   border:1px solid rgba(52,211,153,.28);border-radius:6px;
+                   font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">Approve</button>
+          <button onclick="openRejectModal(${u.id})"
+            style="padding:.35rem .75rem;background:rgba(251,113,133,.1);color:#fb7185;
+                   border:1px solid rgba(251,113,133,.25);border-radius:6px;
+                   font-size:.74rem;font-weight:700;cursor:pointer;">Reject</button>
+        ` : u.role !== 'admin' && u.is_active ? `
+          <button onclick="deactivateUser(${u.id})"
+            style="padding:.35rem .75rem;background:rgba(148,163,184,.08);color:var(--text-muted);
+                   border:1px solid var(--border);border-radius:6px;font-size:.74rem;cursor:pointer;">Deactivate</button>
+        ` : `<span style="font-size:.74rem;color:var(--text-muted);">${u.is_active ? '—' : 'Inactive'}</span>`}
+      </td>
+    </tr>
+  `).join('');
+
+  // Pagination
+  const pag = document.getElementById('users_pagination');
+  if (pag && data.pages > 1) {
+    pag.innerHTML = Array.from({ length: data.pages }, (_, i) => i + 1).map(p => `
+      <button onclick="loadUsers(${p})"
+        style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);
+               background:${p===page?'var(--cyan)':'var(--bg-input)'};
+               color:${p===page?'#080c14':'var(--text)'};
+               font-size:.78rem;font-weight:600;cursor:pointer;margin:0 2px;">${p}</button>
+    `).join('');
+  } else if (pag) { pag.innerHTML = ''; }
+}
+
+/* ── Deactivate ──────────────────────────────────────────────────── */
+
+async function deactivateUser(userId) {
+  if (!confirm('Deactivate this user? They will not be able to log in.')) return;
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/deactivate`);
+  if (ok) { showToast('User deactivated.', 'success'); loadUsers(usersPage); loadStats(); }
+  else     showToast(data.error || 'Failed.', 'error');
+}
+
+/* ── Audit log ───────────────────────────────────────────────────── */
+
+async function loadAuditLog() {
+  const tbody = document.getElementById('audit_body');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;"><div class="spinner" style="margin:0 auto;"></div></td></tr>`;
+
+  const { ok, data } = await apiFetch(`${ADMIN}/users?per_page=50`);
+  if (!ok) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load.</td></tr>`;
+    return;
+  }
+
+  const users = data.users || [];
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No activity yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td style="padding:.65rem;font-size:.78rem;color:var(--text-muted);">${timeAgo(u.created_at)}</td>
+      <td style="padding:.65rem;">${roleBadge(u.role)}</td>
+      <td style="padding:.65rem;font-size:.83rem;color:var(--text);">${u.full_name}</td>
+      <td style="padding:.65rem;font-size:.78rem;color:var(--text-muted);">${u.email}</td>
+      <td style="padding:.65rem;">${statusBadge(u.account_status)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ── Boot ────────────────────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Verify admin session
   try {
-    const res = await fetch(`${API}/me`, { credentials: 'include' });
-    if (!res.ok) { window.location.href = '/login'; return null; }
-    const user = await res.json();
-    if (allowedRoles.length && !allowedRoles.includes(user.role)) {
-      window.location.href = '/login'; return null;
-    }
-    return user;
+    const res = await fetch('/auth/me', { credentials: 'include' });
+    if (!res.ok) { window.location.href = '/login'; return; }
+    const me = await res.json();
+    if (me.role !== 'admin') { window.location.href = '/login'; return; }
+    if (me.account_status !== 'approved') { window.location.href = '/login?status=' + me.account_status; return; }
   } catch {
-    window.location.href = '/login'; return null;
+    window.location.href = '/login'; return;
   }
-}
 
-/* ================================================================
-   BOOT
-   ================================================================ */
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('login_form')   ?.addEventListener('submit', handleLogin);
-  document.getElementById('register_form')?.addEventListener('submit', handleRegister);
-  document.querySelector('[data-action="logout"]')?.addEventListener('click', handleLogout);
-
-  // Password strength
-  document.getElementById('password')?.addEventListener('input', function () { renderStrength(this.value); });
-
-  // Password toggles
-  document.querySelectorAll('.pw-eye').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const t = document.getElementById(btn.dataset.target || 'password');
-      if (!t) return;
-      const show = t.type === 'password';
-      t.type          = show ? 'text' : 'password';
-      btn.textContent = show ? '🙈' : '👁';
-    });
-  });
-
-  // Alumni extra fields
-  document.querySelectorAll('input[name="role"]').forEach(r => {
-    r.addEventListener('change', function () {
-      const s = document.getElementById('alumni_fields');
-      if (!s) return;
-      s.classList.toggle('open', this.value === 'alumni');
-      ['department','degree_program','graduation_year'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.required = this.value === 'alumni';
-      });
-    });
-  });
-
-  // Login page banners
-  const loginAlert = document.getElementById('login_alert');
-  if (loginAlert) {
-    const p = new URLSearchParams(window.location.search);
-    if (p.get('registered')) showAlert(loginAlert, '✅ Account created! You can now sign in.', 'success');
-    if (p.get('verified'))   showAlert(loginAlert, '✅ Email verified! You can now sign in.',  'success');
-  }
+  // Load overview
+  await loadStats();
+  await loadRecentActivity();
 });
