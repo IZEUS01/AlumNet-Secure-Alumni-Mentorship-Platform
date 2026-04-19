@@ -1,132 +1,125 @@
 """
 AlumNet - Application Factory
-Initialises all extensions and registers blueprints.
-Uses the factory pattern so the app can be created with different
-configs (dev / test / prod) without global state.
 """
 
 import os
 import logging
-from flask import Flask, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_cors import CORS
-from flask_talisman import Talisman
+from flask import Flask, jsonify, send_from_directory
 
 from config import get_config
 
-# ------------------------------------------------------------------ #
-# Extension instances (not bound to any app yet)
-# ------------------------------------------------------------------ #
-db = SQLAlchemy()
-login_manager = LoginManager()
-csrf = CSRFProtect()
-limiter = Limiter(key_func=get_remote_address)
+BACKEND_DIR  = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BACKEND_DIR, "..", "frontend")
+
+# Single source of truth — all extensions come from extensions.py
+from extensions import db, login_manager, csrf, limiter, mail
 
 
 def create_app(config_class=None):
-    """
-    Application factory.
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(FRONTEND_DIR, "templates"),
+        static_folder=os.path.join(FRONTEND_DIR, "static"),
+        static_url_path="/static",
+    )
 
-    Usage:
-        app = create_app()                      # reads FLASK_ENV
-        app = create_app(TestingConfig)         # explicit config
-    """
-    app = Flask(__name__)
-
-    # ------------------------------------------------------------------ #
-    # Load configuration
-    # ------------------------------------------------------------------ #
     cfg = config_class or get_config()
     app.config.from_object(cfg)
 
-    # Ensure upload directory exists and is not web-accessible (DATA-04)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-    # ------------------------------------------------------------------ #
-    # Security headers (APP-04)
-    # Flask-Talisman adds HSTS, CSP, X-Frame-Options, etc.
-    # ------------------------------------------------------------------ #
-    Talisman(
-        app,
-        force_https=app.config.get("TALISMAN_FORCE_HTTPS", True),
-        strict_transport_security=app.config.get(
-            "TALISMAN_STRICT_TRANSPORT_SECURITY", True
-        ),
-        strict_transport_security_max_age=app.config.get(
-            "TALISMAN_STRICT_TRANSPORT_SECURITY_MAX_AGE", 31536000
-        ),
-        content_security_policy=app.config.get("CONTENT_SECURITY_POLICY"),
-        session_cookie_secure=app.config.get("SESSION_COOKIE_SECURE", True),
-        session_cookie_http_only=True,
-    )
+    from flask_talisman import Talisman
+    if not app.debug:
+        Talisman(app, force_https=True, strict_transport_security=True,
+                 strict_transport_security_max_age=31536000,
+                 content_security_policy=app.config.get("CONTENT_SECURITY_POLICY"),
+                 session_cookie_secure=True, session_cookie_http_only=True)
+    else:
+        Talisman(app, force_https=False, strict_transport_security=False,
+                 content_security_policy=False,
+                 session_cookie_secure=False, session_cookie_http_only=True)
 
-    # ------------------------------------------------------------------ #
-    # CORS — restrict to trusted origins only
-    # ------------------------------------------------------------------ #
-    allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5500")
+    from security.headers import register_security_headers
+    register_security_headers(app)
+
+    from flask_cors import CORS
+    allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5000")
     CORS(app, origins=allowed_origins.split(","), supports_credentials=True)
 
-    # ------------------------------------------------------------------ #
-    # Database (DATA-05 — SQLAlchemy ORM prevents raw SQL injection)
-    # ------------------------------------------------------------------ #
     db.init_app(app)
-
-    # ------------------------------------------------------------------ #
-    # Login manager (AUTH-05, AUTH-06, AUTH-07)
-    # ------------------------------------------------------------------ #
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Please log in to access this page."
     login_manager.login_message_category = "warning"
-    login_manager.session_protection = "strong"   # Re-validates session on each request
-
-    # ------------------------------------------------------------------ #
-    # CSRF protection (APP-03)
-    # ------------------------------------------------------------------ #
+    login_manager.session_protection = "strong"
     csrf.init_app(app)
-
-    # ------------------------------------------------------------------ #
-    # Rate limiter (prevents brute-force / DoS — R10, threat model)
-    # ------------------------------------------------------------------ #
     limiter.init_app(app)
+    mail.init_app(app)
 
-    # ------------------------------------------------------------------ #
-    # Logging (APP-06 — security audit log)
-    # ------------------------------------------------------------------ #
     _configure_logging(app)
 
-    # ------------------------------------------------------------------ #
-    # Register blueprints
-    # ------------------------------------------------------------------ #
-    from auth.routes import auth_bp
-    app.register_blueprint(auth_bp, url_prefix="/auth")
+    from models.user            import User            # noqa: F401
+    from models.student         import Student         # noqa: F401
+    from models.alumni          import Alumni          # noqa: F401
+    from models.admin           import Admin           # noqa: F401
+    from models.work_experience import WorkExperience  # noqa: F401
+    from models.mentorship      import MentorshipRequest      # noqa: F401
+    from models.verification    import VerificationDocument   # noqa: F401
+    from models.audit_log       import AuditLog        # noqa: F401
 
-    # Other blueprints (registered as you build them)
-    # from routes.student  import student_bp
-    # from routes.alumni   import alumni_bp
-    # from routes.admin    import admin_bp
-    # from routes.mentorship import mentorship_bp
-    # app.register_blueprint(student_bp,    url_prefix="/student")
-    # app.register_blueprint(alumni_bp,     url_prefix="/alumni")
-    # app.register_blueprint(admin_bp,      url_prefix="/admin")
-    # app.register_blueprint(mentorship_bp, url_prefix="/mentorship")
+    from auth.routes       import auth_bp
+    from routes.student    import student_bp
+    from routes.alumni     import alumni_bp
+    from routes.admin      import admin_bp
+    from routes.mentorship import mentorship_bp
 
-    # ------------------------------------------------------------------ #
-    # User loader for Flask-Login
-    # ------------------------------------------------------------------ #
-    from models.user import User
+    app.register_blueprint(auth_bp,        url_prefix="/auth")
+    csrf.exempt(auth_bp)
+    app.register_blueprint(student_bp,     url_prefix="/student")
+    app.register_blueprint(alumni_bp,      url_prefix="/alumni")
+    app.register_blueprint(admin_bp,       url_prefix="/admin")
+    app.register_blueprint(mentorship_bp,  url_prefix="/mentorship")
+
+    @app.route("/")
+    def index():
+        return send_from_directory(FRONTEND_DIR, "index.html")
+
+    @app.route("/login")
+    def login_page():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "login.html")
+
+    @app.route("/register")
+    def register_page():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "register.html")
+
+    @app.route("/student/dashboard")
+    def student_dashboard():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "student_dashboard.html")
+
+    @app.route("/alumni/dashboard")
+    def alumni_dashboard():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "alumni_dashboard.html")
+
+    @app.route("/admin/dashboard")
+    def admin_dashboard():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "admin_panel.html")
+
+    @app.route("/pending")
+    def pending_approval():
+        return send_from_directory(os.path.join(FRONTEND_DIR, "templates"), "pending.html")
+
+    @app.route("/static/js/<path:filename>")
+    def serve_js(filename):
+        return send_from_directory(os.path.join(FRONTEND_DIR, "static", "js"), filename)
+
+    @app.route("/static/css/<path:filename>")
+    def serve_css(filename):
+        return send_from_directory(os.path.join(FRONTEND_DIR, "static", "css"), filename)
 
     @login_manager.user_loader
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
-    # ------------------------------------------------------------------ #
-    # Global error handlers (APP-05 — no sensitive error info to client)
-    # ------------------------------------------------------------------ #
     @app.errorhandler(400)
     def bad_request(e):
         return jsonify({"error": "Bad request."}), 400
@@ -149,64 +142,75 @@ def create_app(config_class=None):
 
     @app.errorhandler(500)
     def internal_error(e):
-        # Log full detail server-side; return generic message to client
         app.logger.error("Internal server error: %s", str(e))
         return jsonify({"error": "An internal error occurred."}), 500
 
-    # ------------------------------------------------------------------ #
-    # Health-check endpoint (no auth required)
-    # ------------------------------------------------------------------ #
     @app.route("/health")
     def health():
         return jsonify({"status": "ok", "app": app.config["APP_NAME"]}), 200
 
-    # ------------------------------------------------------------------ #
-    # Create tables in dev / test (use migrations in production)
-    # ------------------------------------------------------------------ #
+    @app.route("/csrf-token", methods=["GET"])
+    def csrf_token():
+        from security.csrf import get_csrf_token
+        return jsonify({"csrf_token": get_csrf_token()}), 200
+
     with app.app_context():
         if app.config.get("TESTING") or app.config.get("DEBUG"):
             db.create_all()
+        _seed_admin(app)
 
     return app
 
 
-# ------------------------------------------------------------------ #
-# Logging helper
-# ------------------------------------------------------------------ #
-def _configure_logging(app: Flask):
-    """
-    Set up structured logging to file + console.
-    Captures authentication events and suspicious activity (APP-06).
-    """
+def _seed_admin(app):
+    """Create the default admin account on first startup."""
+    from models.user import User
+    from models.admin import Admin
+    from auth.utils import hash_password
+
+    if User.query.filter_by(username="admin").first():
+        return
+
+    admin_user = User(
+        email="admin@alumnet.giki.edu.pk",
+        username="admin",
+        full_name="System Administrator",
+        password_hash=hash_password("Admin@123"),
+        role="admin",
+        account_status="approved",
+        email_verified=True,
+        is_active=True,
+    )
+    db.session.add(admin_user)
+    db.session.flush()
+
+    admin_profile = Admin(
+        user_id=admin_user.id,
+        department="IT Administration",
+        access_level="super_admin",
+    )
+    db.session.add(admin_profile)
+    db.session.commit()
+    app.logger.info("DEFAULT ADMIN CREATED — username=admin  password=Admin@123")
+
+
+def _configure_logging(app):
     log_level = getattr(logging, app.config.get("LOG_LEVEL", "INFO"))
     log_file  = app.config.get("LOG_FILE", "logs/alumnet.log")
-
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
-
-    formatter = logging.Formatter(
-        "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
-    )
-
-    # File handler
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(formatter)
-
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(log_level)
-    console_handler.setFormatter(formatter)
-
+    formatter = logging.Formatter("[%(asctime)s] %(levelname)s in %(module)s: %(message)s")
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(log_level)
+    fh.setFormatter(formatter)
+    ch = logging.StreamHandler()
+    ch.setLevel(log_level)
+    ch.setFormatter(formatter)
     app.logger.setLevel(log_level)
-    app.logger.addHandler(file_handler)
-    app.logger.addHandler(console_handler)
-
+    app.logger.addHandler(fh)
+    app.logger.addHandler(ch)
     app.logger.info("AlumNet logging initialised — level: %s", app.config.get("LOG_LEVEL"))
 
 
-# ------------------------------------------------------------------ #
-# Entry point
-# ------------------------------------------------------------------ #
 if __name__ == "__main__":
     flask_app = create_app()
     flask_app.run(
