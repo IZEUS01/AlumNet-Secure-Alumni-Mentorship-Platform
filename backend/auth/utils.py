@@ -159,3 +159,26 @@ def get_lockout_remaining_seconds(lockout_until: Optional[datetime]) -> int:
 def normalise_email(email: str) -> str:
     """Lowercase and strip whitespace from email addresses."""
     return email.strip().lower()
+
+# ------------------------------------------------------------------ #
+# OTP generation  (AUTH-EMAIL)
+# ------------------------------------------------------------------ #
+
+import random
+from datetime import timedelta
+
+def generate_otp(length: int = 6) -> str:
+    """
+    Generate a cryptographically-seeded numeric OTP.
+    Uses secrets.randbelow for uniform distribution — NOT random.randint.
+    """
+    import secrets
+    digits = "0123456789"
+    return "".join(secrets.choice(digits) for _ in range(length))
+
+
+def get_otp_expiry() -> "datetime":
+    """Return the OTP expiry datetime based on config."""
+    from flask import current_app
+    minutes = current_app.config.get("OTP_EXPIRY_MINUTES", 10)
+    return datetime.now(timezone.utc) + timedelta(minutes=minutes)
