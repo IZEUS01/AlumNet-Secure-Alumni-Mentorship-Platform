@@ -261,12 +261,17 @@ def create_app(config_class=None):
     # Create tables in dev / test (use Alembic migrations in production)
     # ------------------------------------------------------------------ #
     with app.app_context():
-        if app.config.get("TESTING") or app.config.get("DEBUG"):
-            # Drop + recreate so schema changes (new columns) always apply in dev.
-            # In production use Alembic migrations instead.
+        if app.config.get("TESTING"):
+            # Tests use in-memory DB — full reset is fine and expected.
             db.drop_all()
             db.create_all()
-            _seed_admin(app)
+        else:
+            # Dev & production: only create tables that don't exist yet.
+            # This preserves all registered users across server restarts.
+            # If you change the schema, delete alumnet_dev.db once manually,
+            # or use Alembic migrations.
+            db.create_all()
+        _seed_admin(app)
 
     return app
 
