@@ -21,7 +21,7 @@ WTForms==3.1.2
 
 # Rate Limiting - prevents brute-force & DoS (R10, DoS threat)
 Flask-Limiter==3.8.0
-redis==5.1.1                   # Backend for rate limiter (optional, falls back to memory)
+redis==5.1.1
 
 # Security Headers (APP-04)
 Flask-Talisman==1.1.0
@@ -29,10 +29,13 @@ Flask-Talisman==1.1.0
 # Input Validation & Sanitization (APP-01)
 bleach==6.1.0
 email-validator==2.2.0
-marshmallow==3.22.0            # Schema validation
+marshmallow==3.22.0
 
 # Secure File Upload (DATA-02, DATA-03)
-python-magic==0.4.27           # MIME type detection via magic bytes
+python-magic==0.4.27
+
+# Email (OTP verification — AUTH-EMAIL)
+Flask-Mail==0.10.0
 
 # Environment & Config
 python-dotenv==1.0.1
