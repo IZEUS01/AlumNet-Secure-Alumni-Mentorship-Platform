@@ -13,7 +13,7 @@ Security notes:
 """
 
 from datetime import datetime, timezone
-from app import db
+from extensions import db  # ✅ FIXED: was "from app import db"
 
 
 class AuditLog(db.Model):
@@ -37,9 +37,9 @@ class AuditLog(db.Model):
     # ------------------------------------------------------------------ #
     # Event classification
     # ------------------------------------------------------------------ #
-    event_type = db.Column(db.String(80),  nullable=False, index=True)   # e.g. LOGIN_SUCCESS
-    target_type = db.Column(db.String(80), nullable=True)                 # e.g. "user", "alumni"
-    target_id   = db.Column(db.Integer,    nullable=True)                 # ID of affected record
+    event_type  = db.Column(db.String(80),  nullable=False, index=True)   # e.g. LOGIN_SUCCESS
+    target_type = db.Column(db.String(80),  nullable=True)                 # e.g. "user", "alumni"
+    target_id   = db.Column(db.Integer,     nullable=True)                 # ID of affected record
 
     # ------------------------------------------------------------------ #
     # Request context
