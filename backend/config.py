@@ -164,3 +164,15 @@ config_map = {
 def get_config():
     env = os.environ.get("FLASK_ENV", "development").lower()
     return config_map.get(env, DevelopmentConfig)
+    # ------------------------------------------------------------------ #
+    # Email / OTP  (AUTH-EMAIL — email verification at registration)
+    # ------------------------------------------------------------------ #
+    MAIL_SERVER   = os.environ.get("MAIL_SERVER",   "smtp.gmail.com")
+    MAIL_PORT     = int(os.environ.get("MAIL_PORT",  587))
+    MAIL_USE_TLS  = os.environ.get("MAIL_USE_TLS",  "true").lower() == "true"
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@alumnet.edu.pk")
+
+    OTP_EXPIRY_MINUTES = 10      # OTP expires after 10 minutes
+    OTP_LENGTH         = 6       # 6-digit numeric OTP
