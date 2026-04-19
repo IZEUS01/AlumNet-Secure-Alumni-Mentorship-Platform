@@ -365,6 +365,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!res.ok) { window.location.href = '/login'; return; }
     const me = await res.json();
     if (me.role !== 'admin') { window.location.href = '/login'; return; }
+    if (me.account_status !== 'approved') { window.location.href = '/login?status=' + me.account_status; return; }
   } catch {
     window.location.href = '/login'; return;
   }
