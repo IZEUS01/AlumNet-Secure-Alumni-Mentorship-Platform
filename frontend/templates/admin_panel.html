@@ -395,9 +395,7 @@
     document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
   });
 
-  // Section navigation
-  let activeSection = 'overview';
-
+  // Section navigation — always reloads data when switching sections
   function showSection(name) {
     document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
@@ -408,21 +406,9 @@
     const link = document.querySelector(`.sidebar-link[onclick="showSection('${name}')"]`);
     if (link) link.classList.add('active');
 
-    activeSection = name;
-
-    // Lazy-load section data
-    if (name === 'pending' && typeof loadPending === 'function') loadPending(1);
-    if (name === 'users'   && typeof loadUsers   === 'function') loadUsers(1);
-    if (name === 'audit'   && typeof loadAuditLog === 'function') loadAuditLog();
-  }
-
-  // Debounce search
-  let searchTimer;
-  function debounceSearch() {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      if (typeof loadUsers === 'function') loadUsers(1);
-    }, 350);
+    if (name === 'pending') loadPending(1);
+    if (name === 'users')   loadUsers(1);
+    if (name === 'audit')   loadAuditLog();
   }
 
   // Reject modal helpers
@@ -443,9 +429,7 @@
       document.getElementById('rejection_reason').focus();
       return;
     }
-    if (typeof rejectAlumni === 'function') {
-      await rejectAlumni(userId, reason);
-    }
+    await rejectAlumni(userId, reason);
     closeRejectModal();
   }
 </script>
