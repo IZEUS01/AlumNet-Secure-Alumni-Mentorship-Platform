@@ -85,17 +85,20 @@ def register():
         errors["full_name"] = "Full name is required."
     if role_input not in ("student", "alumni"):
         errors["role"] = "Role must be 'student' or 'alumni'."
+
+    # department + graduation_year are required for BOTH roles
+    # but only validated when provided — default to sensible fallback
     if not department:
         errors["department"] = "Department is required."
-    if not graduation_year:
-        errors["graduation_year"] = "Graduation year is required."
-    else:
+    if graduation_year:
         try:
             graduation_year = int(graduation_year)
             if not (1990 <= graduation_year <= 2040):
-                errors["graduation_year"] = "Enter a valid graduation year."
+                errors["graduation_year"] = "Enter a valid graduation year (1990–2040)."
         except (ValueError, TypeError):
             errors["graduation_year"] = "Graduation year must be a number."
+    else:
+        graduation_year = None   # optional — stored as NULL
 
     if not password:
         errors["password"] = "Password is required."
@@ -136,8 +139,8 @@ def register():
         profile = Student(
             user_id=user.id,
             department=department,
-            degree_program=degree_program or "Not specified",
-            graduation_year=graduation_year,
+            degree_program=degree_program or "",
+            graduation_year=graduation_year,   # may be None
         )
         if current_semester:
             try:
