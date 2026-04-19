@@ -1,353 +1,356 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="referrer" content="strict-origin-when-cross-origin"/>
   <title>Create Account — AlumNet</title>
-  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/styles.css"/>
   <style>
-    .register-page {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem 1rem;
+    /* ── Page layout ── */
+    body { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+
+    .register-wrap {
+      display:grid;
+      grid-template-columns:420px 1fr;
+      min-height:100vh;
+      width:100%;
     }
 
-    .register-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 2.5rem;
-      width: 100%;
-      max-width: 520px;
-      box-shadow: 0 40px 80px rgba(0,0,0,0.6), var(--shadow-glow);
-      animation: auth-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      z-index: 1;
+    /* ── Left branding panel ── */
+    .reg-brand {
+      background:linear-gradient(160deg,#080c14 0%,#0d1628 60%,#071320 100%);
+      display:flex; flex-direction:column; justify-content:center;
+      padding:3.5rem; position:relative; overflow:hidden;
+      border-right:1px solid var(--border);
+    }
+    .reg-brand::before {
+      content:'';position:absolute;inset:0;
+      background-image:
+        linear-gradient(rgba(79,196,247,.035) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(79,196,247,.035) 1px,transparent 1px);
+      background-size:48px 48px;
+      animation:grid-drift 24s linear infinite;
+    }
+    .reg-brand::after {
+      content:'';position:absolute;
+      top:-10%;left:-10%;width:340px;height:340px;
+      background:radial-gradient(circle,rgba(79,196,247,.09) 0%,transparent 65%);
+      pointer-events:none;
+      animation:orb 12s ease-in-out infinite alternate;
+    }
+    @keyframes grid-drift{ to{background-position:48px 48px} }
+    @keyframes orb{ from{transform:translate(0,0)} to{transform:translate(30px,30px)} }
+
+    .reg-brand-inner { position:relative;z-index:1; }
+
+    .brand-logo {
+      font-size:2rem;font-weight:800;letter-spacing:-.04em;
+      color:var(--text);margin-bottom:2.5rem;
+    }
+    .brand-logo span{color:var(--cyan);}
+
+    .brand-tagline {
+      font-size:1.65rem;font-weight:700;line-height:1.2;
+      margin-bottom:.9rem;
+    }
+    .brand-tagline .grad {
+      background:linear-gradient(90deg,var(--cyan),var(--emerald));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
     }
 
-    @keyframes auth-in {
-      from { opacity: 0; transform: translateY(24px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
+    .brand-sub { font-size:.9rem;color:var(--text-muted);line-height:1.7;margin-bottom:2.5rem; }
+
+    .brand-features { display:flex;flex-direction:column;gap:.9rem; }
+    .bf-item {
+      display:flex;align-items:center;gap:.75rem;
+      opacity:0;animation:fade-up .5s ease forwards;
+    }
+    .bf-item:nth-child(1){animation-delay:.2s}
+    .bf-item:nth-child(2){animation-delay:.35s}
+    .bf-item:nth-child(3){animation-delay:.5s}
+    @keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+    .bf-icon {
+      width:38px;height:38px;border-radius:10px;flex-shrink:0;
+      background:var(--cyan-dim);border:1px solid rgba(79,196,247,.2);
+      display:flex;align-items:center;justify-content:center;font-size:1rem;
+    }
+    .bf-text strong{display:block;font-size:.825rem;font-weight:600;color:var(--text);}
+    .bf-text span{font-size:.75rem;color:var(--text-muted);}
+
+    /* ── Right form panel ── */
+    .reg-form-panel {
+      background:var(--bg-1);
+      display:flex;align-items:center;justify-content:center;
+      padding:2.5rem 2rem;overflow-y:auto;
     }
 
-    .step-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      margin-bottom: 2rem;
+    .reg-form-inner { width:100%;max-width:460px; }
+
+    /* Header */
+    .form-head { margin-bottom:1.75rem; }
+    .form-head h1 { font-size:1.55rem;font-weight:700;margin-bottom:.25rem; }
+    .form-head p  { font-size:.875rem;color:var(--text-muted); }
+
+    /* Section label */
+    .section-lbl {
+      font-size:.7rem;font-weight:700;letter-spacing:.1em;
+      text-transform:uppercase;color:var(--text-muted);
+      margin:1.25rem 0 .75rem;display:flex;align-items:center;gap:.6rem;
     }
-
-    .step {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex: 1;
-    }
-
-    .step-num {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: var(--bg-input);
-      border: 1.5px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      flex-shrink: 0;
-      transition: all 0.3s ease;
-    }
-
-    .step.active .step-num {
-      background: var(--cyan);
-      border-color: var(--cyan);
-      color: #080c14;
-      box-shadow: 0 0 12px rgba(79,196,247,0.4);
-    }
-
-    .step.done .step-num {
-      background: var(--emerald);
-      border-color: var(--emerald);
-      color: #080c14;
-    }
-
-    .step-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .step.active .step-label { color: var(--cyan); }
-
-    .step-line {
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-      margin: 0 0.5rem;
-      transition: background 0.3s ease;
-    }
-
-    .step-line.done { background: var(--emerald); }
+    .section-lbl::after{content:'';flex:1;height:1px;background:var(--border);}
 
     /* Role selector */
-    .role-selector {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-bottom: 1.25rem;
+    .role-row { display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:1.1rem; }
+    .role-opt { position:relative;cursor:pointer; }
+    .role-opt input { position:absolute;opacity:0;pointer-events:none; }
+    .role-card {
+      display:flex;align-items:center;gap:.65rem;
+      padding:.7rem 1rem;
+      background:var(--bg-input);border:1.5px solid var(--border);
+      border-radius:10px;transition:all .18s;cursor:pointer;
+    }
+    .role-card:hover { border-color:rgba(79,196,247,.3);background:rgba(79,196,247,.03); }
+    .role-opt input:checked + .role-card {
+      border-color:var(--cyan);background:var(--cyan-dim);
+      box-shadow:0 0 0 1px var(--cyan);
+    }
+    .role-card-icon { font-size:1.15rem;flex-shrink:0; }
+    .role-card-text strong { display:block;font-size:.82rem;font-weight:700;color:var(--text); }
+    .role-card-text span  { font-size:.7rem;color:var(--text-muted); }
+
+    /* Two-column grid */
+    .field-row { display:grid;grid-template-columns:1fr 1fr;gap:0 .9rem; }
+
+    /* Password eye */
+    .pw-wrap { position:relative; }
+    .pw-wrap .form-control { padding-right:2.6rem; }
+    .pw-eye {
+      position:absolute;right:.8rem;top:50%;transform:translateY(-50%);
+      background:none;border:none;color:var(--text-muted);cursor:pointer;
+      font-size:.95rem;line-height:1;transition:color var(--t-fast);padding:0;
+    }
+    .pw-eye:hover { color:var(--cyan); }
+
+    /* Strength bar */
+    .strength-row {
+      display:flex;align-items:center;gap:.7rem;
+      margin-top:.35rem;display:none;
+    }
+    .strength-track { flex:1;height:3px;background:var(--bg-input);border-radius:99px;overflow:hidden; }
+    .strength-fill  { height:100%;width:0;border-radius:99px;transition:width .3s,background .3s; }
+    .strength-lbl   { font-size:.7rem;font-weight:700;min-width:42px;text-align:right; }
+
+    /* Alumni extra fields */
+    .alumni-extra {
+      overflow:hidden;max-height:0;opacity:0;
+      transition:max-height .45s cubic-bezier(.16,1,.3,1),opacity .35s;
+    }
+    .alumni-extra.open { max-height:400px;opacity:1; }
+
+    /* Submit */
+    .submit-row { margin-top:1.25rem; }
+
+    /* Footer */
+    .reg-footer {
+      margin-top:1.25rem;text-align:center;
+      font-size:.82rem;color:var(--text-muted);
+    }
+    .reg-footer a { color:var(--cyan);font-weight:600; }
+    .reg-footer a:hover { color:#7dd8ff;text-decoration:underline; }
+
+    /* Secure badge */
+    .secure-row {
+      margin-top:1.1rem;text-align:center;
+      font-size:.7rem;color:var(--text-muted);
+      display:flex;align-items:center;justify-content:center;gap:.4rem;
     }
 
-    .role-option {
-      position: relative;
-      cursor: pointer;
+    @media(max-width:860px){
+      .register-wrap { grid-template-columns:1fr; }
+      .reg-brand { display:none; }
+      .reg-form-panel { min-height:100vh; }
     }
-
-    .role-option input[type="radio"] {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .role-label {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 1rem 0.75rem;
-      background: var(--bg-input);
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      text-align: center;
-      transition: all 0.25s ease;
-      cursor: pointer;
-    }
-
-    .role-label:hover {
-      border-color: rgba(79,196,247,0.3);
-      background: rgba(79,196,247,0.04);
-    }
-
-    .role-option input:checked + .role-label {
-      border-color: var(--cyan);
-      background: var(--cyan-dim);
-      box-shadow: 0 0 0 1px var(--cyan);
-    }
-
-    .role-icon { font-size: 1.5rem; }
-
-    .role-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .role-desc {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-    }
-
-    .alumni-fields-section {
-      overflow: hidden;
-      max-height: 0;
-      opacity: 0;
-      transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
-    }
-
-    .alumni-fields-section.visible {
-      max-height: 400px;
-      opacity: 1;
-    }
-
-    .field-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0 1rem;
-    }
-
-    .pw-toggle { position: relative; }
-    .pw-toggle .pw-eye {
-      position: absolute;
-      right: 0.85rem;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 1rem;
-      line-height: 1;
-      transition: color var(--t-fast);
-    }
-    .pw-toggle .pw-eye:hover { color: var(--cyan); }
-    .pw-toggle .form-control  { padding-right: 2.75rem; }
   </style>
 </head>
 <body>
-<div class="register-page">
-  <div class="register-card">
+<div class="register-wrap">
 
-    <div style="text-align: center; margin-bottom: 1.5rem;">
-      <div class="auth-logo">Alum<span>Net</span></div>
-      <p class="auth-tagline">Create your secure account</p>
+  <!-- Left — Brand -->
+  <aside class="reg-brand">
+    <div class="reg-brand-inner">
+      <div class="brand-logo">Alum<span>Net</span></div>
+      <h2 class="brand-tagline">Connect with the<br/><span class="grad">right mentors</span></h2>
+      <p class="brand-sub">A verified alumni network for GIK students. Every connection is trusted, every mentor is real.</p>
+      <div class="brand-features">
+        <div class="bf-item">
+          <div class="bf-icon">🔐</div>
+          <div class="bf-text">
+            <strong>Security First</strong>
+            <span>bcrypt hashing · CSRF · rate limiting</span>
+          </div>
+        </div>
+        <div class="bf-item">
+          <div class="bf-icon">✅</div>
+          <div class="bf-text">
+            <strong>Verified Alumni Only</strong>
+            <span>Every mentor reviewed by admin</span>
+          </div>
+        </div>
+        <div class="bf-item">
+          <div class="bf-icon">🛡️</div>
+          <div class="bf-text">
+            <strong>Role-Based Access</strong>
+            <span>Students, alumni & admins stay separate</span>
+          </div>
+        </div>
+      </div>
     </div>
+  </aside>
 
-    <div id="register_alert" class="alert hidden mb-2" role="alert"></div>
+  <!-- Right — Form -->
+  <main class="reg-form-panel">
+    <div class="reg-form-inner">
 
-    <form id="register_form" novalidate autocomplete="on">
+      <div class="form-head">
+        <h1>Create your account</h1>
+        <p>Join AlumNet and start building meaningful connections.</p>
+      </div>
 
-      <!-- Role selection -->
-      <div class="form-group">
-        <label class="form-label">I am a …</label>
-        <div class="role-selector">
-          <label class="role-option">
-            <input type="radio" id="role_student" name="role" value="student" checked />
-            <span class="role-label">
-              <span class="role-icon">🎓</span>
-              <span class="role-title">Student</span>
-              <span class="role-desc">Looking for mentors</span>
+      <div id="register_alert" class="alert hidden" role="alert"></div>
+
+      <form id="register_form" novalidate autocomplete="on">
+
+        <!-- Role -->
+        <div class="section-lbl">I am a</div>
+        <div class="role-row">
+          <label class="role-opt">
+            <input type="radio" name="role" value="student" checked/>
+            <span class="role-card">
+              <span class="role-card-icon">🎓</span>
+              <span class="role-card-text">
+                <strong>Student</strong>
+                <span>Find a mentor</span>
+              </span>
             </span>
           </label>
-          <label class="role-option">
-            <input type="radio" id="role_alumni" name="role" value="alumni" />
-            <span class="role-label">
-              <span class="role-icon">💼</span>
-              <span class="role-title">Alumni</span>
-              <span class="role-desc">Offer mentorship</span>
+          <label class="role-opt">
+            <input type="radio" name="role" value="alumni"/>
+            <span class="role-card">
+              <span class="role-card-icon">💼</span>
+              <span class="role-card-text">
+                <strong>Alumni</strong>
+                <span>Offer mentorship</span>
+              </span>
             </span>
           </label>
         </div>
-        <div class="form-error" id="role_error" role="alert"></div>
-      </div>
 
-      <!-- Base fields -->
-      <div class="form-group">
-        <label class="form-label" for="full_name">Full Name</label>
-        <input class="form-control" type="text" id="full_name" name="full_name"
-               autocomplete="name" placeholder="Muhammad Ali" required maxlength="255" />
-        <div class="form-error" id="full_name_error" role="alert"></div>
-      </div>
-
-      <div class="field-grid">
-        <div class="form-group">
-          <label class="form-label" for="username">Username</label>
-          <input class="form-control" type="text" id="username" name="username"
-                 autocomplete="username" placeholder="m.ali" required maxlength="80"
-                 pattern="[a-zA-Z0-9_.]{3,80}" />
-          <div class="form-error" id="username_error" role="alert"></div>
-        </div>
+        <!-- Personal info -->
+        <div class="section-lbl">Personal info</div>
 
         <div class="form-group">
-          <label class="form-label" for="email">Email Address</label>
-          <input class="form-control" type="email" id="email" name="email"
-                 autocomplete="email" placeholder="you@giki.edu.pk" required maxlength="254" />
-          <div class="form-error" id="email_error" role="alert"></div>
+          <label class="form-label" for="full_name">Full Name</label>
+          <input class="form-control" type="text" id="full_name" name="full_name"
+                 autocomplete="name" placeholder="e.g. Muhammad Ali"
+                 required maxlength="255"/>
+          <div class="form-error" id="full_name_error" role="alert"></div>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label class="form-label" for="password">Password</label>
-        <div class="pw-toggle">
-          <input class="form-control" type="password" id="password" name="password"
-                 autocomplete="new-password" placeholder="Min 8 chars, upper, digit, special" required maxlength="128" />
-          <button class="pw-eye" type="button" id="toggle_pw" aria-label="Toggle password visibility">👁</button>
-        </div>
-        <div class="password-strength" id="pw_strength_wrap" style="display:none;">
-          <div class="password-strength-bar" id="pw_strength_bar"></div>
-        </div>
-        <div class="form-error" id="password_error" role="alert"></div>
-      </div>
-
-      <!-- Alumni extra fields — animated reveal -->
-      <div class="alumni-fields-section" id="alumni_fields">
-        <div class="field-grid">
+        <div class="field-row">
           <div class="form-group">
-            <label class="form-label" for="department">Department</label>
-            <input class="form-control" type="text" id="department" placeholder="Computer Science" maxlength="120" />
+            <label class="form-label" for="username">Username</label>
+            <input class="form-control" type="text" id="username" name="username"
+                   autocomplete="username" placeholder="m.ali"
+                   required maxlength="80"/>
+            <div class="form-error" id="username_error" role="alert"></div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="degree_program">Degree Program</label>
-            <input class="form-control" type="text" id="degree_program" placeholder="BS Computer Science" maxlength="150" />
+            <label class="form-label" for="email">Email</label>
+            <input class="form-control" type="email" id="email" name="email"
+                   autocomplete="email" placeholder="you@giki.edu.pk"
+                   required maxlength="254"/>
+            <div class="form-error" id="email_error" role="alert"></div>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="section-lbl">Security</div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <div class="pw-wrap">
+            <input class="form-control" type="password" id="password" name="password"
+                   autocomplete="new-password"
+                   placeholder="Min 8 chars, uppercase, digit, symbol"
+                   required maxlength="128"/>
+            <button class="pw-eye" type="button" data-target="password" aria-label="Toggle password">👁</button>
+          </div>
+          <div class="strength-row" id="pw_strength_wrap">
+            <div class="strength-track"><div class="strength-fill" id="pw_strength_bar"></div></div>
+            <span class="strength-lbl" id="pw_strength_label"></span>
+          </div>
+          <div class="form-error" id="password_error" role="alert"></div>
+        </div>
+
+        <!-- Academic details — always visible for both roles -->
+        <div class="section-lbl">Academic details</div>
+        <div class="field-row">
+          <div class="form-group">
+            <label class="form-label" for="department">Department <span style="color:var(--rose)">*</span></label>
+            <input class="form-control" type="text" id="department"
+                   placeholder="Computer Science" maxlength="120" required/>
+            <div class="form-error" id="department_error" role="alert"></div>
           </div>
           <div class="form-group">
             <label class="form-label" for="graduation_year">Graduation Year</label>
-            <input class="form-control" type="number" id="graduation_year" placeholder="2022" min="2000" max="2030" />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="roll_number">Roll Number</label>
-            <input class="form-control" type="text" id="roll_number" placeholder="2019-CS-001" maxlength="30" />
+            <input class="form-control" type="number" id="graduation_year"
+                   placeholder="2025" min="1990" max="2040"/>
+            <div class="form-error" id="graduation_year_error" role="alert"></div>
           </div>
         </div>
+
+        <!-- Alumni-only extra fields (hidden until alumni selected) -->
+        <div class="alumni-extra" id="alumni_fields">
+          <div class="section-lbl">Alumni details</div>
+          <div class="field-row">
+            <div class="form-group">
+              <label class="form-label" for="degree_program">Degree Program</label>
+              <input class="form-control" type="text" id="degree_program"
+                     placeholder="BS Computer Science" maxlength="150"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="roll_number">GIK Roll No.</label>
+              <input class="form-control" type="text" id="roll_number"
+                     placeholder="2019-CS-001" maxlength="30"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="submit-row">
+          <button class="btn btn-primary w-full btn-lg" type="submit" id="register_btn">
+            Create Account
+          </button>
+        </div>
+
+      </form>
+
+      <div class="reg-footer">
+        Already have an account? <a href="/login">Sign in</a>
       </div>
 
-      <button class="btn btn-primary w-full btn-lg" type="submit" id="register_btn" style="margin-top: 0.5rem;">
-        Create Account
-      </button>
-    </form>
+      <div class="secure-row">
+        🔒 <span>Passwords hashed with bcrypt · Data never shared</span>
+      </div>
 
-    <div class="auth-switch">
-      Already have an account? <a href="/templates/login.html">Sign in</a>
     </div>
+  </main>
 
-    <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); text-align: center;">
-      <p style="font-size: 0.72rem; color: var(--text-muted);">
-        🔒 Your data is encrypted and never shared with third parties
-      </p>
-    </div>
-  </div>
 </div>
 
 <div id="toast-container"></div>
-
 <script src="/static/js/auth.js"></script>
-<script>
-  // Role toggle — animated reveal of alumni fields
-  document.querySelectorAll('input[name="role"]').forEach(radio => {
-    radio.addEventListener('change', function () {
-      const section = document.getElementById('alumni_fields');
-      section.classList.toggle('visible', this.value === 'alumni');
-
-      // Toggle required on alumni fields
-      ['department', 'degree_program', 'graduation_year'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.required = this.value === 'alumni';
-      });
-    });
-  });
-
-  // Password strength meter
-  document.getElementById('password').addEventListener('input', function () {
-    const val = this.value;
-    const wrap = document.getElementById('pw_strength_wrap');
-    const bar  = document.getElementById('pw_strength_bar');
-
-    if (!val) { wrap.style.display = 'none'; return; }
-    wrap.style.display = 'block';
-
-    let score = 0;
-    if (val.length >= 8)               score++;
-    if (/[A-Z]/.test(val))             score++;
-    if (/[0-9]/.test(val))             score++;
-    if (/[^A-Za-z0-9]/.test(val))      score++;
-
-    const colors = ['', '#fb7185', '#fbbf24', '#34d399', '#4fc4f7'];
-    const widths = ['0%', '25%', '50%', '75%', '100%'];
-    bar.style.width     = widths[score];
-    bar.style.background = colors[score];
-  });
-
-  // Password toggle
-  document.getElementById('toggle_pw').addEventListener('click', function () {
-    const pw = document.getElementById('password');
-    const isText = pw.type === 'text';
-    pw.type = isText ? 'password' : 'text';
-    this.textContent = isText ? '👁' : '🙈';
-  });
-</script>
 </body>
 </html>
