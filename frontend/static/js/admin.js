@@ -31,9 +31,9 @@ function showToast(msg, type = 'success') {
     box.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;';
     document.body.appendChild(box);
   }
-  const bg   = type === 'success' ? 'rgba(52,211,153,.15)' : 'rgba(251,113,133,.15)';
-  const bdr  = type === 'success' ? 'rgba(52,211,153,.35)' : 'rgba(251,113,133,.35)';
-  const t    = document.createElement('div');
+  const bg  = type === 'success' ? 'rgba(52,211,153,.15)' : 'rgba(251,113,133,.15)';
+  const bdr = type === 'success' ? 'rgba(52,211,153,.35)' : 'rgba(251,113,133,.35)';
+  const t   = document.createElement('div');
   t.style.cssText = `padding:.75rem 1.1rem;border-radius:8px;font-size:.85rem;font-weight:500;
     color:#e2e8f4;background:${bg};border:1px solid ${bdr};
     box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:320px;pointer-events:auto;
@@ -55,11 +55,15 @@ function roleBadge(role) {
   return `<span style="background:${color}22;color:${color};padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700;border:1px solid ${color}44;white-space:nowrap;">${label}</span>`;
 }
 
-function statusBadge(status) {
+function statusBadge(status, isActive) {
+  // Show 'Suspended' if is_active=false regardless of account_status
+  if (isActive === false) {
+    return `<span style="background:rgba(148,163,184,.12);color:#94a3b8;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700;border:1px solid rgba(148,163,184,.25);">Suspended</span>`;
+  }
   const map = {
     pending:  ['Pending',  '#fbbf24'],
     approved: ['Approved', '#34d399'],
-    rejected: ['Rejected', '#fb7185'],
+    rejected: ['Blocked',  '#fb7185'],
   };
   const [label, color] = map[status] || [status, '#94a3b8'];
   return `<span style="background:${color}22;color:${color};padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700;border:1px solid ${color}44;">${label}</span>`;
@@ -86,7 +90,6 @@ async function loadStats() {
   set('stat_verified', data.total_verified_alumni);
   set('stat_pending',  data.pending_approval);
 
-  // Also update sidebar pending badge
   const badge = document.getElementById('sidebar_pending_count');
   if (badge) {
     badge.textContent = data.pending_approval;
@@ -124,7 +127,7 @@ async function loadRecentActivity() {
         <div style="font-size:.74rem;color:var(--text-muted);">${u.email}</div>
       </div>
       <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0;">
-        ${roleBadge(u.role)} ${statusBadge(u.account_status)}
+        ${roleBadge(u.role)} ${statusBadge(u.account_status, u.is_active)}
         <span style="font-size:.7rem;color:var(--text-muted);min-width:60px;text-align:right;">${timeAgo(u.created_at)}</span>
       </div>
     </div>
@@ -144,7 +147,7 @@ async function loadPending(page = 1) {
 
   const { ok, data } = await apiFetch(`${ADMIN}/pending?page=${page}&per_page=20`);
   if (!ok) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load pending users.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load pending users. (${data.error || 'Check console'})</td></tr>`;
     return;
   }
 
@@ -208,10 +211,12 @@ async function approveUser(userId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/approve`);
   if (ok) {
-    showToast(data.message || 'User approved ✓', 'success');
-    const row = document.getElementById(`pending_row_${userId}`);
+    showToast(data.message || 'User approved ✓', 'success');  // ✅ always 'success' toast
+    const row = document.getElementById(`pending_row_${userId}`)
+             || document.getElementById(`user_row_${userId}`);
     if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>row.remove(),300); }
     loadStats();
+    loadUsers(usersPage);
   } else {
     showToast(data.error || 'Approval failed.', 'error');
     if (btn) { btn.disabled = false; btn.textContent = '✓ Approve'; }
@@ -223,10 +228,12 @@ async function approveUser(userId, btn) {
 async function rejectAlumni(userId, reason) {
   const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/reject`, { reason });
   if (ok) {
-    showToast(data.message || 'User rejected.', 'error');
-    const row = document.getElementById(`pending_row_${userId}`);
+    showToast(data.message || 'User rejected.', 'success');   // ✅ 'success' (action succeeded)
+    const row = document.getElementById(`pending_row_${userId}`)
+             || document.getElementById(`user_row_${userId}`);
     if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>row.remove(),300); }
     loadStats();
+    loadUsers(usersPage);
   } else {
     showToast(data.error || 'Rejection failed.', 'error');
   }
@@ -252,7 +259,8 @@ async function loadUsers(page = 1) {
   const search = (document.getElementById('user_search')?.value || '').trim();
   const role   = document.getElementById('users_role_filter')?.value || '';
   let url = `${ADMIN}/users?page=${page}&per_page=20`;
-  if (role) url += `&role=${encodeURIComponent(role)}`;
+  if (role)   url += `&role=${encodeURIComponent(role)}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
 
   const { ok, data } = await apiFetch(url);
   if (!ok) {
@@ -260,12 +268,7 @@ async function loadUsers(page = 1) {
     return;
   }
 
-  let users = data.users || [];
-  if (search) {
-    const q = search.toLowerCase();
-    users = users.filter(u => (u.full_name+u.email+u.username).toLowerCase().includes(q));
-  }
-
+  const users  = data.users || [];
   const countEl = document.getElementById('users_count');
   if (countEl) countEl.textContent = `${data.total} user${data.total !== 1 ? 's' : ''} total`;
 
@@ -274,7 +277,57 @@ async function loadUsers(page = 1) {
     return;
   }
 
-  tbody.innerHTML = users.map(u => `
+  tbody.innerHTML = users.map(u => {
+    const isAdmin    = u.role === 'admin';
+    const isPending  = u.account_status === 'pending';
+    const isSuspended = u.is_active === false;
+    const isBlocked  = u.account_status === 'rejected' && !u.is_active;
+
+    let actions = '';
+
+    if (isAdmin) {
+      actions = `<span style="font-size:.74rem;color:var(--text-muted);">—</span>`;
+
+    } else if (isPending) {
+      actions = `
+        <button onclick="approveUser(${u.id}, this)"
+          style="padding:.35rem .75rem;background:rgba(52,211,153,.12);color:#34d399;
+                 border:1px solid rgba(52,211,153,.28);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">✓ Approve</button>
+        <button onclick="openRejectModal(${u.id})"
+          style="padding:.35rem .75rem;background:rgba(251,113,133,.1);color:#fb7185;
+                 border:1px solid rgba(251,113,133,.25);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;">✕ Reject</button>`;
+
+    } else if (isSuspended || isBlocked) {
+      actions = `
+        <button onclick="reactivateUser(${u.id})"
+          style="padding:.35rem .75rem;background:rgba(52,211,153,.10);color:#34d399;
+                 border:1px solid rgba(52,211,153,.25);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">↩ Reactivate</button>
+        <button onclick="deleteUser(${u.id}, '${u.full_name.replace(/'/g,"\\'")}') "
+          style="padding:.35rem .75rem;background:rgba(251,113,133,.08);color:#fb7185;
+                 border:1px solid rgba(251,113,133,.2);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;">🗑 Delete</button>`;
+
+    } else {
+      // Active, approved user
+      actions = `
+        <button onclick="suspendUser(${u.id})"
+          style="padding:.35rem .75rem;background:rgba(251,191,36,.08);color:#fbbf24;
+                 border:1px solid rgba(251,191,36,.2);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">⏸ Suspend</button>
+        <button onclick="blockUser(${u.id})"
+          style="padding:.35rem .75rem;background:rgba(251,113,133,.08);color:#fb7185;
+                 border:1px solid rgba(251,113,133,.2);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">🚫 Block</button>
+        <button onclick="deleteUser(${u.id}, '${u.full_name.replace(/'/g,"\\'")}') "
+          style="padding:.35rem .75rem;background:rgba(148,163,184,.07);color:#94a3b8;
+                 border:1px solid rgba(148,163,184,.15);border-radius:6px;
+                 font-size:.74rem;font-weight:700;cursor:pointer;">🗑 Delete</button>`;
+    }
+
+    return `
     <tr id="user_row_${u.id}">
       <td style="padding:.7rem;">
         <div style="font-weight:600;color:var(--text);">${u.full_name}</div>
@@ -283,25 +336,10 @@ async function loadUsers(page = 1) {
       <td style="padding:.7rem;font-size:.83rem;color:var(--text-muted);">${u.email}</td>
       <td style="padding:.7rem;">${roleBadge(u.role)}</td>
       <td style="padding:.7rem;font-size:.78rem;color:var(--text-muted);">${timeAgo(u.created_at)}</td>
-      <td style="padding:.7rem;">${statusBadge(u.account_status)}</td>
-      <td style="padding:.7rem;">
-        ${u.account_status === 'pending' ? `
-          <button onclick="approveUser(${u.id}, this)"
-            style="padding:.35rem .75rem;background:rgba(52,211,153,.12);color:#34d399;
-                   border:1px solid rgba(52,211,153,.28);border-radius:6px;
-                   font-size:.74rem;font-weight:700;cursor:pointer;margin-right:.3rem;">Approve</button>
-          <button onclick="openRejectModal(${u.id})"
-            style="padding:.35rem .75rem;background:rgba(251,113,133,.1);color:#fb7185;
-                   border:1px solid rgba(251,113,133,.25);border-radius:6px;
-                   font-size:.74rem;font-weight:700;cursor:pointer;">Reject</button>
-        ` : u.role !== 'admin' && u.is_active ? `
-          <button onclick="deactivateUser(${u.id})"
-            style="padding:.35rem .75rem;background:rgba(148,163,184,.08);color:var(--text-muted);
-                   border:1px solid var(--border);border-radius:6px;font-size:.74rem;cursor:pointer;">Deactivate</button>
-        ` : `<span style="font-size:.74rem;color:var(--text-muted);">${u.is_active ? '—' : 'Inactive'}</span>`}
-      </td>
-    </tr>
-  `).join('');
+      <td style="padding:.7rem;">${statusBadge(u.account_status, u.is_active)}</td>
+      <td style="padding:.7rem;white-space:nowrap;">${actions}</td>
+    </tr>`;
+  }).join('');
 
   // Pagination
   const pag = document.getElementById('users_pagination');
@@ -316,13 +354,48 @@ async function loadUsers(page = 1) {
   } else if (pag) { pag.innerHTML = ''; }
 }
 
-/* ── Deactivate ──────────────────────────────────────────────────── */
+/* ── Suspend ─────────────────────────────────────────────────────── */
 
-async function deactivateUser(userId) {
-  if (!confirm('Deactivate this user? They will not be able to log in.')) return;
+async function suspendUser(userId) {
+  if (!confirm('Suspend this user? They cannot log in until reactivated.')) return;
   const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/deactivate`);
-  if (ok) { showToast('User deactivated.', 'success'); loadUsers(usersPage); loadStats(); }
+  if (ok) { showToast('User suspended.', 'success'); loadUsers(usersPage); loadStats(); }
   else     showToast(data.error || 'Failed.', 'error');
+}
+
+/* ── Reactivate ──────────────────────────────────────────────────── */
+
+async function reactivateUser(userId) {
+  if (!confirm('Reactivate this user? They will be able to log in again.')) return;
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/reactivate`);
+  if (ok) { showToast('User reactivated ✓', 'success'); loadUsers(usersPage); loadStats(); }
+  else     showToast(data.error || 'Failed.', 'error');
+}
+
+/* ── Block ───────────────────────────────────────────────────────── */
+
+async function blockUser(userId) {
+  const reason = prompt('Reason for blocking this user (required):');
+  if (!reason || !reason.trim()) return;
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/block`, { reason: reason.trim() });
+  if (ok) { showToast('User blocked.', 'success'); loadUsers(usersPage); loadStats(); }
+  else     showToast(data.error || 'Failed.', 'error');
+}
+
+/* ── Delete ──────────────────────────────────────────────────────── */
+
+async function deleteUser(userId, name) {
+  const confirmed = confirm(`Permanently delete "${name}"?\n\nThis cannot be undone. All their data will be removed.`);
+  if (!confirmed) return;
+  const { ok, data } = await apiPost(`${ADMIN}/users/${userId}/delete`, { confirm: 'DELETE' });
+  if (ok) {
+    showToast(data.message || 'User deleted.', 'success');
+    const row = document.getElementById(`user_row_${userId}`);
+    if (row) { row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>row.remove(),300); }
+    loadStats();
+  } else {
+    showToast(data.error || 'Delete failed.', 'error');
+  }
 }
 
 /* ── Audit log ───────────────────────────────────────────────────── */
@@ -351,7 +424,7 @@ async function loadAuditLog() {
       <td style="padding:.65rem;">${roleBadge(u.role)}</td>
       <td style="padding:.65rem;font-size:.83rem;color:var(--text);">${u.full_name}</td>
       <td style="padding:.65rem;font-size:.78rem;color:var(--text-muted);">${u.email}</td>
-      <td style="padding:.65rem;">${statusBadge(u.account_status)}</td>
+      <td style="padding:.65rem;">${statusBadge(u.account_status, u.is_active)}</td>
     </tr>
   `).join('');
 }
@@ -359,18 +432,19 @@ async function loadAuditLog() {
 /* ── Boot ────────────────────────────────────────────────────────── */
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Verify admin session
   try {
     const res = await fetch('/auth/me', { credentials: 'include' });
     if (!res.ok) { window.location.href = '/login'; return; }
     const me = await res.json();
     if (me.role !== 'admin') { window.location.href = '/login'; return; }
     if (me.account_status !== 'approved') { window.location.href = '/login?status=' + me.account_status; return; }
+
+    const nameEl = document.getElementById('user_name');
+    if (nameEl) nameEl.textContent = me.full_name || me.username || 'Admin';
   } catch {
     window.location.href = '/login'; return;
   }
 
-  // Load overview
   await loadStats();
   await loadRecentActivity();
 });
